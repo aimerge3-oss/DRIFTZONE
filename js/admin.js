@@ -3,13 +3,7 @@
 'use strict';
 
 const Admin = {
-  bindHeaderTap() {
-    const hdr = document.getElementById('hdr');
-    hdr.addEventListener('click', () => {
-      UI.adminTaps++;
-      if (UI.adminTaps >= CONFIG.ADMIN_TAPS) { UI.adminTaps = 0; this.open(); }
-    });
-  },
+  // активация: 7 тапов по заголовку — обработчик вешает UI.bindAdminTaps()
 
   open() {
     UI.modal(`

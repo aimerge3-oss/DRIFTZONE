@@ -1,15 +1,15 @@
-// DRIFTZONE — точка входа. Единый источник правды: Cloudflare Worker + D1.
-// js/game.js (ниже в этом же файле) — офлайн-прототип: та же экономика и формулы,
-// работает без сервера (localStorage), а при наличии Telegram initData синхронизируется с API.
+// DRIFTZONE — ядро игры: экономика, кейсы, рулетка, гонки, коллекция.
+// Единый источник правды в онлайне: Cloudflare Worker + D1 (см. server/).
 'use strict';
 
 const $ = s => document.querySelector(s);
-// Алиасы на UI-примитивы: модули (garage/cases/workshop/races/profile/friends/admin)
-// вызывают toast/haptic/openModal/closeModal как обычные функции.
+// Алиасы на UI-примитивы: game.js и админ вызывают их как обычные функции.
 const toast = m => UI.toast(m);
 const haptic = t => UI.haptic(t);
 const openModal = html => UI.modal(html);
 const closeModal = () => UI.closeModal();
+const refreshHeader = () => UI.renderHeader();
+const renderTab = () => UI.refresh();
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const rnd = (a,b) => a + Math.random()*(b-a);
 const pickW = arr => { const t=arr.reduce((s,x)=>s+x.w,0); let r=Math.random()*t; for(const x of arr){ r-=x.w; if(r<=0) return x; } return arr[arr.length-1]; };
@@ -20,15 +20,17 @@ const Game = {
   async boot() {
     this.booting = true;
     State.load();
-    Friends.captureReferral && Friends.captureReferral();
-    UI.renderNav();
+    if (typeof Friends !== 'undefined' && Friends.captureReferral) Friends.captureReferral();
     UI.bindAdminTaps();
     UI.go('garage');
     UI.renderHeader();
+    // кнопка подарка открывает награды
+    const giftBtn = document.querySelector('.gift-btn');
+    if (giftBtn) giftBtn.onclick = () => openRewards();
     // синхронизация с сервером и фоновый pull
     await this.pullSync();
     setInterval(() => this.pullSync(), CONFIG.SYNC_INTERVAL_MS);
-    // перерисовка шапки/дохода каждые 30 с
+    // перерисовка шапки/топлива каждые 30 с
     setInterval(() => { regenFuel(); UI.renderHeader(); }, 30_000);
     this.booting = false;
   },
@@ -47,14 +49,10 @@ const Game = {
   },
 };
 
-window.addEventListener('DOMContentLoaded', () => Game.boot());
-
-let toastTimer;
-function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 2400);
-}
-function haptic(type){ try{ tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(type||'light'); }catch(e){} }
+window.addEventListener('DOMContentLoaded', () => {
+  try { Game.boot(); }
+  catch (e) { console.error('[boot]', e); const m = document.getElementById('main'); if (m) m.innerHTML = '<div class="card empty">Ошибка запуска 😅</div>'; }
+});
 
 const carImg = carId => `<img class="car-img" src="img/cars/${carId}.webp" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;silhouette&quot;>🚗</div>'">`;
 const rarityTag = r => `<span class="tag" style="background:${RARITY[r].color}">${r}</span>`;
@@ -91,16 +89,7 @@ function pendingIncome() {
   sum *= 1 + 0.01 * State.data.museum.length; // витрина: +1% за машину
   return Math.floor(sum);
 }
-function collectIncome() {
-  const inc = pendingIncome();
-  if (inc <= 0) { toast('Дохода пока нет'); return; }
-  State.data.money += inc;
-  State.data.stats.incomeCollected += inc;
-  for (const e of State.data.garage) e.incomeAt = Date.now();
-  State.save(); refreshHeader(); renderTab(); checkCollectionRewards();
-  toast('+' + money(inc) + ' доход 🚗');
-}
-
+function collectIncome() { return Garage.collectAll(); }
 // ===== XP =====
 function addXp(n, kind) {
   const d = State.data;
@@ -459,26 +448,7 @@ function claimCountryReward(co) {
 // ===== Ежедневка и кейс наград =====
 const dayStr = () => new Date().toISOString().slice(0,10);
 function dailyAvailable() { return State.data.daily.lastDay !== dayStr(); }
-function claimDaily() {
-  const d = State.data;
-  if (!dailyAvailable()) return;
-  const yesterday = new Date(Date.now()-864e5).toISOString().slice(0,10);
-  d.daily.streak = (d.daily.lastDay === yesterday) ? Math.min(d.daily.streak+1, 7) : 1;
-  d.daily.lastDay = dayStr();
-  const b = ECON.dailyBonus[d.daily.streak-1];
-  const parts = [];
-  let msg = `День ${d.daily.streak}: `;
-  if (b.money) { d.money += b.money; msg += money(b.money); }
-  if (b.carCase) { const cs=CAR_CASES.find(c=>c.id===b.carCase); const w=rollCarCaseItem(cs); giveCar(w.id); msg += (msg.endsWith(': ')?'':' + ')+w.name; }
-  if (b.parts) {
-    const pc = PART_CASES.find(c=>c.id===b.parts[0]);
-    for (let i=0;i<b.parts[1];i++) { const r=rollPart(pc); parts.push(r); givePart(r.slot,r.lvl); }
-    msg += (msg.endsWith(': ')?'':' + ')+`${b.parts[1]} детал.`;
-  }
-  addXp(XP_RULES.daily);
-  State.save(); refreshHeader(); renderTab(); updateGiftDot(); checkCollectionRewards();
-  toast('🎁 ' + msg);
-}
+// (сбор дохода — см. Garage.collectAll; дейлик — см. Profile.claimDaily)
 function rewardReady() { return Date.now() - State.data.rewardCaseAt >= ECON.rewardCaseHours*3600e3; }
 function rewardCdText() {
   const left = ECON.rewardCaseHours*3600e3 - (Date.now() - State.data.rewardCaseAt);
@@ -510,7 +480,7 @@ function openRewards() {
     return `<div class="stat-line"><span>День ${i+1}</span><span>${txt} ${i+1===(d.daily.streak||0)&&d.daily.lastDay===dayStr()?'✅':''}</span></div>`;
   }).join('');
   openModal(`<h3>🎁 Награды</h3>
-    <button class="btn" style="width:100%;margin-bottom:10px" ${dailyAvailable()?'':'disabled'} onclick="claimDaily()">Ежедневный бонус${d.daily.streak?` (серия ${d.daily.streak})`:''}</button>
+    <button class="btn" style="width:100%;margin-bottom:10px" ${dailyAvailable()?'':'disabled'} onclick="Profile.claimDaily()">Ежедневный бонус${d.daily.streak?` (серия ${d.daily.streak})`:''}</button>
     <button class="btn sec" style="width:100%;margin-bottom:10px" ${rewardReady()?'':'disabled'} onclick="openRewardCase()">
       ${rewardReady()?'Открыть кейс наград':'Кейс наград: '+rewardCdText()}</button>
     <div class="muted" style="margin-bottom:6px">Кейс наград каждые 4 часа: деньги 50%, деталь Ателье 25%, полный бак 15%, машина Городского 10%</div>
@@ -547,8 +517,6 @@ function checkQuests() {
 }
 
 // ===== Модалки =====
-function openModal(html) { $('#modal-body').innerHTML = html; $('#modal').classList.add('show'); }
-function closeModal() { $('#modal').classList.remove('show'); }
 
 function openProfile() {
   const d = State.data;
@@ -566,7 +534,11 @@ function openProfile() {
 }
 
 // ===== ГОНКИ =====
-function viewRace() {
+// экран гонки регистрируется ниже через UI.register
+function bindRaceButtons(el) {
+  // клик по кнопкам соперников делегируем startRace(uid, rivalId)
+}
+function screenRace() {
   const d = State.data;
   let html = `<div class="card row"><div class="grow"><b>⛽ Общий бак</b><div class="muted">${d.fuel}/${RACE.fuelMax} • +1 каждые ${RACE.fuelRegenMin} мин</div></div>
     <div class="progress" style="width:40%"><i style="width:${100*d.fuel/RACE.fuelMax}%"></i></div></div>`;
@@ -671,179 +643,21 @@ function startRace(uid, rivalId) {
 }
 function closeRace() { $('#race-screen').classList.remove('show'); window._raceFrame=null; renderTab(); }
 
-// ===== Рендер табов =====
-let curTab = 'garage';
-window._shopTab = 'cases';
-const TABS = [ ['garage','🏠','Гараж'], ['cases','📦','Кейсы'], ['shop','🔧','Мастерская'], ['race','🏁','Гонки'], ['collect','⭐','Коллекция'] ];
 
-function renderTab() {
-  const m = $('#main');
-  if (curTab==='garage') m.innerHTML = viewGarage();
-  else if (curTab==='cases') m.innerHTML = viewCases();
-  else if (curTab==='shop') m.innerHTML = viewShop();
-  else if (curTab==='race') m.innerHTML = viewRace();
-  else m.innerHTML = viewCollection();
-  checkQuests();
-}
 
-function viewGarage() {
-  const d = State.data;
-  const inc = pendingIncome();
-  let html = `<div class="card row"><div class="grow"><div class="big">Доход: ${money(inc)}</div>
-    <div class="muted">3%/час • до 4 ч • Гараж ${d.garage.length}/${d.garageSlots}</div></div>
-    <button class="btn" onclick="collectIncome()">Забрать</button></div>`;
-  if (!d.garage.length) html += `<div class="empty-hint">Гараж пуст.<br>Открой кейс машин во вкладке «Кейсы» 👇</div>`;
-  for (const e of d.garage) {
-    const car = carById(e.carId);
-    const inMus = d.museum.includes(e.uid);
-    const bgStyle = e.paint ? `style="border-radius:12px;background:radial-gradient(ellipse at center, ${e.paint}44 30%, transparent 72%)"` : '';
-    html += `<div class="card">
-      <div class="row"><div class="grow">${rarityTag(car.rarity)} <b>${esc(car.name)}</b>${inMus?' 🏛️':''}
-        <div class="muted">${tunedHp(e)} л.с. • ${money(carValue(e))} • ${money(Math.floor(carValue(e)*ECON.incomePerHour))}/ч</div></div>
-        <button class="btn small sec" onclick="openCarCard(${e.uid})">Открыть</button></div>
-      <div ${bgStyle}>${carImg(e.carId)}</div></div>`;
-  }
-  if (d.garageSlots < ECON.garageMax)
-    html += `<button class="btn sec" style="width:100%" onclick="buyGarageSlot()">+1 место в гараже — ${money(State.slotPrice(d.garageSlots+1))}</button>`;
-  return html;
-}
+// ===== Экспорт игровых функций для inline-onclick и модулей экранов =====
+Object.assign(window, {
+  Game, startRace, closeRace, collectIncome, sellCar, sellPart, sellAllParts, mergeParts,
+  installPart, uninstallAll, pickPartFor, removePart, doPaint, openPaint, paintCost,
+  toMuseum, fromMuseum, buyMuseumSlot, buyGarageSlot, openRewardCase, openRewards,
+  claimCountryReward, toggleAutoSell, openCarCase, openPartCase, takeCaseDrops,
+  // алиасы совместимости с модулями garage/races/profile
+  _garageCollect: () => Garage.collectAll(),
+  _raceStart: (t) => Races.start(t),
+  _profileDaily: () => Profile.claimDaily(),
+});
 
-function openCarCard(uid) {
-  const d = State.data; const e = d.garage.find(x=>x.uid===uid); if(!e) return;
-  const car = carById(e.carId);
-  const inMus = d.museum.includes(uid);
-  const isSecret = SECRET_CARS[car.country]===car.id && d.questsDone['claim_'+car.country];
-  let slots = '';
-  for (const s of PART_SLOTS) {
-    const lvl = e.parts[s.id];
-    slots += `<div class="slot ${lvl==null?'empty':''}" onclick="${lvl==null?`pickPartFor(${uid},'${s.id}')`:`removePart(${uid},'${s.id}');openCarCard(${uid})`}">
-      <div>${s.name}</div><div class="lvl" style="color:${lvl==null?'inherit':RARITY[PART_LEVELS[lvl].r].color}">${lvl==null?'—':PART_LEVELS[lvl].name}</div></div>`;
-  }
-  const bgStyle = e.paint ? `style="border-radius:12px;background:radial-gradient(ellipse at center, ${e.paint}55 30%, transparent 72%)"` : '';
-  openModal(`
-    <h3>${isSecret?'⭐ ':rarityTag(car.rarity)} ${esc(car.name)}</h3>
-    <div ${bgStyle}>${carImg(e.carId)}</div>
-    <div class="muted">${car.brand} • ${car.country.toUpperCase()} • сток ${car.hp} л.с.</div>
-    <div class="big">Тюнинг: ${tunedHp(e)} л.с. • Цена: ${money(carValue(e))}</div>
-    <div class="slots">${slots}</div>
-    <div class="btns">
-      ${PAINT_ENABLED && !NO_PAINT.includes(e.carId) && !inMus ? `<button class="btn sec" onclick="openPaint(${uid})">🎨 Покраска (${money(paintCost(e))})</button>`:''}
-      ${inMus ? `<button class="btn sec" onclick="fromMuseum(${uid})">← Из музея</button>`
-              : `<button class="btn sec" onclick="toMuseum(${uid})">🏛️ В музей</button>`}
-      ${Object.keys(e.parts).length && !inMus ? `<button class="btn sec" onclick="uninstallAll(${uid})">Снять все детали</button>`:''}
-      ${!isSecret && !inMus ? `<button class="btn danger" onclick="sellCar(${uid})">Продать ${money(Math.floor(carValue(e)*ECON.sellShare))}</button>`:''}
-    </div>
-    <div class="muted" style="margin-top:8px">Ставятся детали не ниже класса ${raceClass(car.rarity)}. Снятие — перерыв 20 мин. В музее: +1% дохода за штуку, но доход не копится.</div>
-  `);
-}
+// экран «Гонки» — нативный движок game.js (светофор, драг-анимация, ставки)
+UI.register('race', el => { el.innerHTML = screenRace(); });
 
-function viewCases() {
-  let html = '<h2 class="sec">Кейсы машин</h2><div class="grid2">';
-  for (const cs of CAR_CASES) {
-    html += `<div class="card case-card">
-      <div style="font-size:34px">${cs.icon}</div><b>${cs.name}</b>
-      <div class="muted">${money(cs.price)}</div>
-      <div class="btns" style="margin-top:8px">${[1,3,5].map(n=>`<button class="btn small ${n===1?'':'sec'}" onclick="event.stopPropagation();openCarCase('${cs.id}',${n})">×${n}</button>`).join('')}</div>
-    </div>`;
-  }
-  html += '</div><div class="muted" style="margin-top:8px">Из кейса не может выпасть машина дешевле половины его цены.</div>';
-  return html;
-}
-
-function viewShop() {
-  const d = State.data;
-  const tab = window._shopTab;
-  let html = `<div class="btns" style="margin-bottom:10px">
-    <button class="btn ${tab==='cases'?'':'sec'}" onclick="_shopTab='cases';renderTab()">Кейсы деталей</button>
-    <button class="btn ${tab==='stock'?'':'sec'}" onclick="_shopTab='stock';renderTab()">Склад (${Object.values(d.inventory).reduce((a,b)=>a+b,0)})</button></div>`;
-  if (tab==='cases') {
-    const as = window._autoSell;
-    html += `<div class="card"><b>Автопродажа</b><div class="muted">выпавшие детали этих уровней сразу продаются за 50%</div>
-      <div class="btns" style="margin-top:8px">${PART_LEVELS.map((l,i)=>`<button class="btn small ${as&&as.has(l.name)?'':'sec'}" onclick="toggleAutoSell('${l.name}')">${l.name}</button>`).join('')}</div></div>`;
-    for (const pc of PART_CASES) {
-      html += `<div class="card"><b>${pc.name}</b> — ${money(pc.price)}
-        <div class="muted">Целевая деталь +15%${pc.topOnly?' (только случайная)':''}</div>
-        <div class="btns" style="margin-top:8px">
-          ${[1,3,5,10].map(n=>`<button class="btn small ${n===1?'':'sec'}" onclick="openPartCase('${pc.id}',${n})">×${n}</button>`).join('')}
-        </div>
-        <div class="btns" style="margin-top:6px">${PART_SLOTS.map(s=>`<button class="btn small sec" style="font-size:11px" onclick="openPartCase('${pc.id}',1,'${s.id}')">${s.name}</button>`).join('')}</div>
-      </div>`;
-    }
-  } else {
-    const keys = Object.keys(d.inventory).filter(k=>d.inventory[k]>0);
-    if (!keys.length) html += '<div class="empty-hint">Склад пуст. Открой кейсы деталей! 🔧</div>';
-    else html += `<button class="btn danger" style="width:100%;margin-bottom:10px" onclick="sellAllParts()">Продать всё со склада</button>`;
-    const groups = {};
-    for (const k of keys) { const s=k.split('|')[0]; (groups[s] ||= []).push(k); }
-    for (const s of PART_SLOTS.filter(x=>groups[x.id])) {
-      html += `<h2 class="sec">${s.name}</h2>`;
-      for (const k of groups[s.id].sort()) {
-        const lvl = +k.split('|')[1];
-        html += `<div class="card row"><div class="grow"><b style="color:${RARITY[PART_LEVELS[lvl].r].color}">${partName(k)}</b> ×${d.inventory[k]}
-          <div class="muted">${money(PART_LEVELS[lvl].price)} • шанс слияния ${Math.round(MERGE_CHANCE[PART_LEVELS[lvl].r]*100)}%</div></div>
-          <div class="btns"><button class="btn small" onclick="mergeParts('${k}')">Слить ×3</button>
-          <button class="btn small sec" onclick="sellPart('${k}')">Продать</button></div></div>`;
-      }
-    }
-  }
-  return html;
-}
-
-function viewCollection() {
-  const d = State.data;
-  let html = `<div class="card"><div class="big">Коллекция: ${collectionCount()}/${CARS.length}</div>
-    <div class="progress" style="margin-top:6px"><i style="width:${100*collectionCount()/CARS.length}%"></i></div></div>`;
-  html += '<h2 class="sec">Награды за количество</h2>';
-  for (const rw of ECON.collectionRewards) {
-    html += `<div class="card row"><div class="grow">${d.questsDone['col_'+rw.n]?'✅':'⬜'} ${rw.n} машин — ${money(rw.money)}${rw.slot?' +'+rw.slot+' мест':''}</div></div>`;
-  }
-  html += '<h2 class="sec">Страны</h2>';
-  for (const co of ['ru','jp','de','it','us']) {
-    const p = countryProgress(co);
-    const claimed = d.questsDone['claim_'+co];
-    html += `<div class="card"><div class="row"><div class="grow"><b>${co.toUpperCase()}</b> ${p.got}/${p.total}
-      <div class="progress" style="margin-top:6px"><i style="width:${100*p.got/p.total}%"></i></div></div>
-      ${p.done && !claimed ? `<button class="btn small" onclick="claimCountryReward('${co}')">Забрать ⭐</button>`:''}
-      ${claimed ? '✅':''}</div>
-      <div class="muted">Награда: ${money(ECON.countryRewards[co])} + ${carById(SECRET_CARS[co]).name}</div></div>`;
-  }
-  html += `<h2 class="sec">Музей 🏛️ (${d.museum.length}/${museumCap()})</h2>`;
-  if (d.museum.length) {
-    html += `<div class="card muted">Бонус витрины: +${d.museum.length}% к общему доходу гаража. Машины на витрине не тюнинговатся, не продаются и не копят доход.</div>`;
-    html += `<div class="grid2">${d.museum.map(uid=>{
-      const e = State.data.garage.find(x=>x.uid===uid); if(!e) return '';
-      return `<div class="card case-card" onclick="openCarCard(${uid})">${carImg(e.carId)}<div class="muted" style="font-size:11px">${esc(carById(e.carId).name)}</div></div>`;
-    }).join('')}</div>`;
-  }
-  if (museumCap() < ECON.museumMax)
-    html += `<button class="btn sec" style="width:100%" onclick="buyMuseumSlot()">+1 место в музее — ${money(ECON.museumPrice*Math.pow(2,d.museumExtra||0))}</button>`;
-  return html;
-}
-
-// ===== Инициализация =====
-function initTabs() {
-  const nav = $('#nav');
-  nav.innerHTML = TABS.map(([id,ico,label])=>
-    `<button data-tab="${id}" class="${id===curTab?'active':''}"><span class="ico">${ico}</span>${label}</button>`).join('');
-  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-    curTab = b.dataset.tab;
-    nav.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
-    renderTab(); haptic('light');
-  });
-}
-function refreshHeader() { $('#hdr-money').textContent = money(State.data.money); renderHeaderAvatar(); updateGiftDot(); }
-function renderHeaderAvatar() {
-  const d = State.data;
-  const pct = Math.min(1, d.xp/xpNeed(d.level));
-  const R=16, C=2*Math.PI*R;
-  $('#hdr-avatar').innerHTML = `
-    <svg viewBox="0 0 38 38">
-      <circle cx="19" cy="19" r="${R}" fill="none" stroke="var(--line)" stroke-width="3"/>
-      <circle cx="19" cy="19" r="${R}" fill="none" stroke="var(--accent)" stroke-width="3"
-        stroke-dasharray="${C*pct} ${C}" stroke-linecap="round" transform="rotate(-90 19 19)"/>
-      <path d="M9 24 Q19 7 29 24 Z" fill="var(--hint)" opacity=".5"/>
-    </svg>
-    <span class="lvl-badge">${d.level}</span>`;
-}
-
-// (инициализация — Game.boot() в начале файла)
+// (навигация и рендер экранов — в ui.js + модулях garage/cases/workshop/races/profile/friends)
