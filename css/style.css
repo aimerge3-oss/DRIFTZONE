@@ -230,6 +230,7 @@ select.input { appearance: none; width: 100%; margin-bottom: 8px; }
 .rt-item { border:2px solid transparent; }
 .rt-name { font-size:11px; line-height:1.2; text-align:center; }
 .drop-line { display:flex; gap:8px; align-items:center; justify-content:center; margin:4px 0; color:#fff; }
+.drop-main { border:2px solid transparent; border-radius:12px; padding:8px 10px; background:rgba(255,255,255,.07); font-size:16px; }
 #rt-take.hidden { visibility:hidden; }
 .money-float { position:absolute; right:0; top:-14px; color:var(--accent); font-weight:800; font-size:13px;
   animation:floatup 1.1s ease-out forwards; pointer-events:none; white-space:nowrap; }

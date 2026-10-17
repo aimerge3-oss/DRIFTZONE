@@ -75,7 +75,7 @@ const RouletteFX = {
     res.classList.remove('show'); res.innerHTML = '';
     takeBtn.classList.add('hidden');
 
-    const win = winners[winners.length - 1]; // последний ролл — «витринный»
+    const win = winners[0]; // показываем ровно ПЕРВЫЙ выигрыш — он же и главный результат
     const pool = this.decoPool(CURRENT_CASE_DEF());
     let html = '';
     for (let i = 0; i < this.N; i++) {
@@ -97,11 +97,17 @@ const RouletteFX = {
 
     setTimeout(() => {
       this.busy = false;
-      res.innerHTML = winners.map(w => {
-        const rc = RARITY[w.rarity];
-        return `<div class="drop-line"><span class="tag" style="background:${rc.color}">${w.rarity}</span>
-          <b>${w.name}</b><span class="muted">${fmt(w.price)} ₽</span></div>`;
-      }).join('') +
+      // главный результат — тот же автомобиль, что остановился под маркером (winners[0])
+      const main = winners[0];
+      const mrc = RARITY[main.rarity];
+      res.innerHTML = `<div class="drop-line drop-main" style="border-color:${mrc.color}">
+          <span class="tag" style="background:${mrc.color}">${mrc.label}</span>
+          <b>${main.name}</b><span class="muted">${fmt(main.price)} ₽</span></div>` +
+        winners.slice(1).map(w => {
+          const rc = RARITY[w.rarity];
+          return `<div class="drop-line"><span class="tag" style="background:${rc.color}">${rc.label}</span>
+            <b>${w.name}</b><span class="muted">${fmt(w.price)} ₽</span></div>`;
+        }).join('') +
         (winners.length > 1 ? `<div class="muted" style="margin-top:4px">Итого ${winners.length} шт.</div>` : '');
       res.classList.add('show');
       takeBtn.classList.remove('hidden');
