@@ -34,6 +34,7 @@ export async function openCarCase(env, tgUser, caseId, count = 1, autoSellBelow 
 
   const drops = [];
   let soldTotal = 0;
+  let grantFailed = false;
   const R_ORDER = ['D', 'C', 'B', 'A', 'S'];
   for (let i = 0; i < count; i++) {
     const carId = rollCar(caseId, secureRandom);
@@ -48,12 +49,19 @@ export async function openCarCase(env, tgUser, caseId, count = 1, autoSellBelow 
       soldTotal += p;
       drops.push({ carId, sold: true, price: p });
     } else {
-      const uid = await grantCar(db, u.id, carId);
-      drops.push({ carId, sold: false, uid });
+      try {
+        const uid = await grantCar(db, u.id, carId);
+        drops.push({ carId, sold: false, uid });
+      } catch {
+        // гараж заполнен на стороне БД — безопасно авто-продаём вместо падения
+        const p = sellPrice(carDef);
+        soldTotal += p; grantFailed = true;
+        drops.push({ carId, sold: true, price: p, reason: 'garage_full' });
+      }
     }
     await addXp(db, u.id, 10);                                        // XP за кейс
   }
-  if (soldTotal > 0) await earnMoney(db, u.id, soldTotal, 'auto_sell', { caseId });
+  if (soldTotal > 0) await earnMoney(db, u.id, soldTotal, 'auto_sell', { caseId, garageFull: grantFailed || undefined });
   return { ok: true, drops, soldTotal, balance: (await db.prepare('SELECT balance FROM users WHERE id = ?').bind(u.id).first()).balance };
 }
 

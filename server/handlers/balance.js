@@ -118,15 +118,16 @@ export async function collectIncome(db, tgUser, clientNow) {
 export async function buySlot(db, tgUser) {
   const u = await ensureUser(db, tgUser);
   const count = await db.prepare('SELECT COUNT(*) c FROM user_cars WHERE user_id = ?').bind(u.id).first();
-  if (count.c >= ECON.garageMax ?? 30) throw new Error('garage_full_max');
-  const price = ECON.slotPrice7 ?? 100000;
-  await db.batch([
+  if (count.c >= ECON.garageMax) throw new Error('garage_full_max');
+  // цена следующего места: до 6-го — бесплатно (стартовый гараж), 7-е = 100К, далее ×2
+  const price = Math.floor(ECON.slotPrice7 * Math.pow(2, Math.max(0, count.c - 6)));
+  const paid = await db.batch([
     db.prepare('UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?').bind(price, u.id, price),
-    db.prepare("INSERT INTO transactions (user_id, kind, amount) VALUES (?, 'buy_slot', ?)").bind(u.id, -price),
+    db.prepare("INSERT INTO transactions (user_id, kind, amount, meta) VALUES (?, 'buy_slot', ?, ?)")
+      .bind(u.id, -price, JSON.stringify({ slots: count.c + 1 })),
   ]);
-  const chk = await db.prepare('SELECT balance FROM users WHERE id = ?').bind(u.id).first();
-  if (chk.balance === u.balance) throw new Error('insufficient_funds');
-  return { ok: true, slotsBought: true };
+  if (!paid[0].meta.changes) throw new Error('insufficient_funds');
+  return { ok: true, slotsBought: count.c + 1, price };
 }
 
 export async function paintCar(db, tgUser, carUid, color) {
@@ -134,11 +135,14 @@ export async function paintCar(db, tgUser, carUid, color) {
   if (!/^#[0-9a-fA-F]{6}$/.test(color || '')) throw new Error('bad_color');
   const car = await db.prepare('SELECT * FROM user_cars WHERE id = ? AND user_id = ?').bind(carUid, u.id).first();
   if (!car) throw new Error('car_not_found');
-  const price = Math.max(ECON.paintMin ?? 5000, Math.floor(CARS[car.car_id].price * (ECON.paintShare ?? 0.05)));
-  await db.batch([
-    db.prepare('UPDATE user_cars SET color_hex = ? WHERE id = ? AND user_id = ?').bind(color, carUid, u.id),
+  const price = Math.max(ECON.paintMin, Math.floor(CARS[car.car_id].price * ECON.paintShare));
+  const upd = await db.batch([
     db.prepare('UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?').bind(price, u.id, price),
+    db.prepare('UPDATE user_cars SET color_hex = ? WHERE id = ? AND user_id = ?').bind(color, carUid, u.id),
+    db.prepare("INSERT INTO transactions (user_id, kind, amount, meta) VALUES (?, 'paint', ?, ?)")
+      .bind(u.id, -price, JSON.stringify({ carUid, color })),
   ]);
+  if (!upd[0].meta.changes) throw new Error('insufficient_funds');
   return { ok: true, cost: price };
 }
 
@@ -151,12 +155,16 @@ export async function upgradeCar(db, tgUser, carUid) {
   if (car.level >= 10) throw new Error('max_level');
   const def = CARS[car.car_id];
   const cost = Math.floor(def.price * 0.08 * car.level);        // L1→2: 8% цены, L9→10: 72%
-  const xpNeed = Math.round(50 * Math.pow(car.level, 1.5));     // опыт машины из гонок
-  if (car.current_xp < xpNeed) throw new Error('need_xp:' + xpNeed);
-  await db.batch([
-    db.prepare('UPDATE user_cars SET level = level + 1, current_xp = current_xp - ? WHERE id = ?').bind(xpNeed, carUid),
+  // XP машины: сервер начисляет +25 за победу в гонке; на L1xp не нужен, дальше растёт
+  const xpNeed = car.level === 1 ? 0 : Math.round(50 * Math.pow(car.level - 1, 1.5));
+  if (car.current_xp < xpNeed) throw new Error('need_car_xp:' + xpNeed);
+  const paid = await db.batch([
     db.prepare('UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?').bind(cost, u.id, cost),
+    db.prepare('UPDATE user_cars SET level = level + 1, current_xp = current_xp - ? WHERE id = ?').bind(xpNeed, carUid),
+    db.prepare("INSERT INTO transactions (user_id, kind, amount, meta) VALUES (?, 'upgrade', ?, ?)")
+      .bind(u.id, -cost, JSON.stringify({ carUid, toLevel: car.level + 1 })),
   ]);
+  if (!paid[0].meta.changes) throw new Error('insufficient_funds');
   return { ok: true, newLevel: car.level + 1, cost };
 }
 

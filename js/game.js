@@ -1,17 +1,53 @@
-// DRIFTZONE — логика, UI, кейсы-рулетка, экономика, гонки
+// DRIFTZONE — точка входа. Единый источник правды: Cloudflare Worker + D1.
+// js/game.js (ниже в этом же файле) — офлайн-прототип: та же экономика и формулы,
+// работает без сервера (localStorage), а при наличии Telegram initData синхронизируется с API.
 'use strict';
 
 const $ = s => document.querySelector(s);
-const fmt = n => {
-  if (n >= 1e9) return (n/1e9).toFixed(n%1e9?1:0).replace('.',',') + ' млрд';
-  if (n >= 1e6) return (n/1e6).toFixed(n%1e6?1:0).replace('.',',') + ' млн';
-  if (n >= 1e4) return Math.round(n/1e3) + 'К';
-  return new Intl.NumberFormat('ru-RU').format(Math.floor(n));
-};
-const money = n => fmt(n) + ' ₽';
+// Алиасы на UI-примитивы: модули (garage/cases/workshop/races/profile/friends/admin)
+// вызывают toast/haptic/openModal/closeModal как обычные функции.
+const toast = m => UI.toast(m);
+const haptic = t => UI.haptic(t);
+const openModal = html => UI.modal(html);
+const closeModal = () => UI.closeModal();
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const rnd = (a,b) => a + Math.random()*(b-a);
 const pickW = arr => { const t=arr.reduce((s,x)=>s+x.w,0); let r=Math.random()*t; for(const x of arr){ r-=x.w; if(r<=0) return x; } return arr[arr.length-1]; };
+
+const Game = {
+  booting: false,
+
+  async boot() {
+    this.booting = true;
+    State.load();
+    Friends.captureReferral && Friends.captureReferral();
+    UI.renderNav();
+    UI.bindAdminTaps();
+    UI.go('garage');
+    UI.renderHeader();
+    // синхронизация с сервером и фоновый pull
+    await this.pullSync();
+    setInterval(() => this.pullSync(), CONFIG.SYNC_INTERVAL_MS);
+    // перерисовка шапки/дохода каждые 30 с
+    setInterval(() => { regenFuel(); UI.renderHeader(); }, 30_000);
+    this.booting = false;
+  },
+
+  async pullSync() {
+    if (!API.initData()) return;            // вне Telegram — чистый офлайн
+    try {
+      const snap = await API.sync();
+      State.applyServer(snap);
+      UI.renderHeader();
+      UI.go(UI.current);                     // перерисовать текущий экран на серверных данных
+    } catch (e) {
+      if (e.message === 'auth_failed') UI.toast(errText(e));
+      // offline/timeout — тихо продолжаем на локальном кэше
+    }
+  },
+};
+
+window.addEventListener('DOMContentLoaded', () => Game.boot());
 
 let toastTimer;
 function toast(msg) {
@@ -810,26 +846,4 @@ function renderHeaderAvatar() {
     <span class="lvl-badge">${d.level}</span>`;
 }
 
-window.addEventListener('DOMContentLoaded', ()=>{
-  State.load();
-  regenFuel();
-  initTabs();
-  refreshHeader();
-  renderTab();
-  setInterval(()=>{ regenFuel(); if(curTab==='garage'||curTab==='race') renderTab(); updateGiftDot(); }, 30000);
-  $('#hdr-money').onclick = collectIncome;
-  $('#hdr-avatar').onclick = openProfile;
-  $('.gift-btn').onclick = openRewards;
-  $('#modal-close').onclick = closeModal;
-  $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
-  if (tg && tg.onCloudData) tg.onCloudData(raw=>{
-    try {
-      const obj = JSON.parse(raw && raw.text ? raw.text : raw);
-      const remote = obj && obj[State.key];
-      if (remote && remote.garage && (!State.data.uidSeq || remote.uidSeq > State.data.uidSeq)) {
-        State.data = Object.assign(State.fresh(), remote); State.save(); refreshHeader(); renderTab();
-      }
-    } catch(e){}
-  });
-  if (dailyAvailable()) setTimeout(openRewards, 500);
-});
+// (инициализация — Game.boot() в начале файла)

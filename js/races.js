@@ -39,7 +39,7 @@ const Races = {
       const myRoll = myPower * (0.9 + Math.random() * 0.2);
       const rivRoll = rivalPower * (0.9 + Math.random() * 0.2);
       const win = myRoll > rivRoll;
-      const basePrize = RACE.prizeByRarity[rivalDef.rarity] ?? 10000;
+      const basePrize = RACE.prizeByRarity[raceClass(rivalDef.rarity)] ?? 10000;
       result = {
         win, reward: win ? Math.round(basePrize * tier.prizeMul) : Math.round(basePrize * 0.1),
         rival: { carId: rivalDef.id, power: rivalPower }, you: { power: myPower },

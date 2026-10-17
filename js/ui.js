@@ -1,5 +1,14 @@
-// DRIFTZONE — навигация и общие примитивы интерфейса.
+// DRIFTZONE — форматирование денег по-русски: 1,2 млн / 350К / 12 345.
+// Числа в интерфейсе (шапка, доход, кейсы) используются отсюда.
 'use strict';
+
+const fmt = n => {
+  if (n >= 1e9) return (n/1e9).toFixed(n%1e9?1:0).replace('.',',') + ' млрд';
+  if (n >= 1e6) return (n/1e6).toFixed(n%1e6?1:0).replace('.',',') + ' млн';
+  if (n >= 1e4) return Math.round(n/1e3) + 'К';
+  return new Intl.NumberFormat('ru-RU').format(Math.floor(n));
+};
+const money = n => fmt(n) + ' ₽';
 
 const UI = {
   screens: {},          // id -> {render(el), onShow?()}
@@ -36,9 +45,18 @@ const UI = {
     document.getElementById('hdr-money').textContent = fmt(d.money) + ' ₽';
     const av = document.getElementById('hdr-avatar');
     av.textContent = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? '🙂' : '🏎️';
-    // скрытая админ-панель: 7 тапов по заголовку
-    clearTimeout(this._tapTimer);
-    this._tapTimer = setTimeout(() => { this.adminTaps = 0; }, 1500);
+  },
+
+  // скрытая админ-панель: 7 тапов по заголовку подряд (окно 1.5 с)
+  bindAdminTaps() {
+    const hdr = document.querySelector('header .title');
+    if (!hdr) return;
+    hdr.addEventListener('click', () => {
+      this.adminTaps++;
+      clearTimeout(this._tapTimer);
+      this._tapTimer = setTimeout(() => { this.adminTaps = 0; }, 1500);
+      if (this.adminTaps >= CONFIG.ADMIN_TAPS) { this.adminTaps = 0; Admin.open(); }
+    });
   },
 
   toast(msg) {
@@ -57,6 +75,13 @@ const UI = {
   },
   closeModal() { document.getElementById('modal').classList.remove('open'); },
 
+  modal(html) {
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal').classList.add('show');
+  },
+  closeModal() {
+    document.getElementById('modal').classList.remove('show');
+  },
   haptic(style) { try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(style || 'light'); } catch {} },
 };
 
