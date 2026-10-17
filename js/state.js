@@ -51,8 +51,54 @@ const State = {
 
   // ===== helpers =====
   addMoney(n) { this.data.money += n; if (n>0) this.data.stats.moneyEarned += n; this.save(); },
+  earn(n) { this.data.money += n; if (n>0) this.data.stats.moneyEarned += n; this.save(); },
   spend(n) { if (this.data.money < n) return false; this.data.money -= n; this.data.stats.spent += n; return true; },
   newUid() { return this.data.uidSeq++; },
+
+  // добавление машины в гараж (используется модулями garage/cases/admin)
+  addCar(carId) {
+    const entry = { uid: this.newUid(), carId, parts: {}, paint: null, incomeAt: Date.now(), level: 1 };
+    this.data.garage.push(entry);
+    if (!this.data.carFuel[entry.uid]) this.data.carFuel[entry.uid] = { fuel: RACE.fuelPerCar, at: Date.now() };
+    this.data.collection[carId] = true;
+    this.save();
+    return entry;
+  },
+  removeCar(uid) {
+    const d = this.data;
+    d.garage = d.garage.filter(c => c.uid !== uid);
+    d.museum = d.museum.filter(u => u !== uid);
+    delete d.carFuel[uid];
+    this.save();
+  },
+  addPart(slotId, lvlIdx) {
+    const key = slotId + '|' + lvlIdx;
+    this.data.inventory[key] = (this.data.inventory[key] || 0) + 1;
+    this.save();
+  },
+  // цена продажи машины: 12.5% от стоимости с учётом установленных деталей
+  sellValue(car) {
+    const def = carById(car.carId);
+    if (!def) return 0;
+    let v = def.price;
+    for (const slotId in (car.parts || {})) {
+      const stage = car.parts[slotId];          // 1-based stage или 0-based lvlIdx — поддерживаем оба
+      const lvlIdx = stage > 4 ? stage - 1 : stage;
+      const pl = PART_LEVELS[lvlIdx];
+      if (pl) v += pl.price;
+    }
+    return Math.floor(v * ECON.sellShare);
+  },
+  refreshFuel() {
+    const d = this.data, now = Date.now();
+    const add = Math.floor((now - d.fuelAt) / (RACE.fuelRegenMin * 60e3));
+    if (add > 0) { d.fuel = Math.min(RACE.fuelMax, d.fuel + add); d.fuelAt += add * RACE.fuelRegenMin * 60e3; this.save(); }
+    for (const e of d.garage) {
+      const cf = d.carFuel[e.uid]; if (!cf) continue;
+      const a = Math.floor((now - cf.at) / (RACE.fuelRegenMin * 60e3));
+      if (a > 0) { cf.fuel = Math.min(RACE.fuelPerCar, cf.fuel + a); cf.at += a * RACE.fuelRegenMin * 60e3; this.save(); }
+    }
+  },
   garageFree() { return this.data.garage.length < this.data.garageSlots; },
   slotPrice(nthSlot) { // цена N-го места (7-е = 100К, далее ×2)
     return ECON.slotPrice7 * Math.pow(2, nthSlot - 7);

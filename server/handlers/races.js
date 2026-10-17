@@ -18,6 +18,15 @@ export function powerScore(carDef, level, parts) {
   return Math.round(statBase * lvlMul * partMul);
 }
 
+// Активная машина: is_active=1, иначе — первая купленная (fallback, чтобы гонка не падала)
+async function getActiveCar(db, userId) {
+  let car = await db.prepare('SELECT * FROM user_cars WHERE user_id = ? AND is_active = 1')
+    .bind(userId).first();
+  if (!car) car = await db.prepare('SELECT * FROM user_cars WHERE user_id = ? ORDER BY acquired_at LIMIT 1')
+    .bind(userId).first();
+  return car;
+}
+
 function secureRandom() {
   const buf = new Uint32Array(1);
   crypto.getRandomValues(buf);
@@ -44,8 +53,8 @@ export async function startRace(env, tgUser, rivalTier) {
   }
   if (fuel < 1) throw new Error('no_fuel');
 
-  // активная машина
-  const car = await db.prepare('SELECT * FROM user_cars WHERE user_id = ? AND is_active = 1').bind(u.id).first();
+  // активная машина (fallback на первую, если флаг не выставлен)
+  const car = await getActiveCar(db, u.id);
   if (!car) throw new Error('no_active_car');
   const def = CARS[car.car_id];
   if (!def) throw new Error('unknown_car');

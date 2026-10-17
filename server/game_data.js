@@ -78,6 +78,8 @@ export const sellPrice = car => Math.floor(car.price * 0.125);
 export const ECON = {
   startMoney:50000, sellShare:0.125, incomePerHour:0.03, incomeCapHours:4,
   fuelMax:15, fuelRegenSec:900,            // 1 топливо / 15 минут
+  garageMax:30, slotPrice7:100000,         // 7-е место = 100К, далее ×2
+  paintShare:0.05, paintMin:5000,          // покраска = 5% цены машины, но не дешевле 5К
   racePrizeByRarity:{D:10000,C:50000,B:200000,A:800000,S:5000000},
   luck:0.10,                                // разброс статов в гонке ±10%
   matchTolerance:0.15,                      // подбор соперника ±15% Power Score
