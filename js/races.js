@@ -114,4 +114,5 @@ const Races = {
   },
 };
 
-UI.register('race', el => Races.render(el));
+// Экран 'race' регистрирует js/game.js (нативный движок драга).
+// Races.start(tierId) остаётся как серверный API для будущего PvP.
