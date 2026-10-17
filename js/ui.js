@@ -23,7 +23,28 @@ const UI = {
   init() {
     // офлайн-режим: без Telegram и без сервера игра полностью локальна (localStorage)
     if (!tg) State.online = false;
-    setInterval(() => { if (this.current === 'garage') this.refresh(); }, 60000);
+    // real-time: накопленный доход тикает каждую секунду, баланс всегда актуален
+    setInterval(() => {
+      UI.renderHeader();
+      if (this.current === 'garage') this._tickIncome();
+    }, 1000);
+  },
+
+  // точечное обновление карточки дохода в гараже без перерисовки всего экрана
+  _tickIncome() {
+    const card = document.querySelector('.income-card');
+    if (!card || RouletteFX.busy) return;
+    const pending = Garage.totalPending();
+    const perHour = Garage.incomePerHour();
+    const ratio = Garage.fillRatio();
+    const big = card.querySelector('.big');
+    if (big) big.textContent = fmtFull(pending) + ' ₽';
+    const per = card.querySelector('[data-perhour]');
+    if (per) per.textContent = fmt(perHour) + ' ₽/ч';
+    const bar = card.querySelector('.progress i');
+    if (bar) bar.style.width = (ratio * 100).toFixed(1) + '%';
+    const btn = card.querySelector('#collect');
+    if (btn) { btn.disabled = pending <= 0; }
   },
 
   go(id) {
@@ -53,6 +74,10 @@ const UI = {
   renderHeader() {
     State.refreshFuel && State.refreshFuel();
     const d = State.data;
+    // все живые отображения баланса на экране обновляются мгновенно
+    document.querySelectorAll('[data-money]').forEach(el => {
+      el.textContent = (el.dataset.money === 'full' ? fmtFull(d.money) : fmt(d.money)) + ' ₽';
+    });
     document.getElementById('hdr-money').textContent = fmt(d.money) + ' ₽';
     const full = document.getElementById('hdr-money-full');
     if (full) full.textContent = fmtFull(d.money) + ' ₽';
@@ -99,6 +124,8 @@ const UI = {
     const el = document.getElementById('hdr-money');
     if (!el) return;
     const from = Math.max(0, State.data.money - delta), to = State.data.money;
+    const floats = [el];
+    document.querySelectorAll('[data-money]').forEach(x => floats.push(x));
     const float = document.createElement('div');
     float.className = 'money-float';
     float.textContent = '+' + fmt(delta) + ' ₽';
@@ -107,9 +134,10 @@ const UI = {
     const t0 = performance.now(), dur = 600;
     const step = now => {
       const k = Math.min(1, (now - t0) / dur);
-      el.textContent = fmt(from + (to - from) * k) + ' ₽';
+      const v = from + (to - from) * k;
+      floats.forEach(f => { f.textContent = (f.dataset && f.dataset.money === 'full' ? fmtFull(v) : fmt(v)) + ' ₽'; });
       if (k < 1) requestAnimationFrame(step);
-      else el.textContent = fmt(to) + ' ₽';
+      else UI.renderHeader(); // финальное точное значение во всех отображениях
     };
     requestAnimationFrame(step);
   },

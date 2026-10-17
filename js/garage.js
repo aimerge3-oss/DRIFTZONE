@@ -59,7 +59,7 @@ const Garage = {
       <div class="card income-card">
         <div class="row between">
           <div><small class="muted">Накоплено</small><div class="big">${fmtFull(pending)} ₽</div></div>
-          <div style="text-align:right"><small class="muted">Доход в час</small><div><b>${fmt(perHour)} ₽/ч</b></div></div>
+          <div style="text-align:right"><small class="muted">Доход в час</small><div><b data-perhour>${fmt(perHour)} ₽/ч</b></div></div>
         </div>
         <div class="progress"><i style="width:${(ratio*100).toFixed(1)}%"></i></div>
         <button class="btn" id="collect" ${pending > 0 ? '' : 'disabled'}>Забрать</button>

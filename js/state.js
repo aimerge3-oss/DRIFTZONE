@@ -50,8 +50,10 @@ const State = {
   reset() { this.data = this.fresh(); this.save(); },
 
   // ===== helpers =====
-  addMoney(n) { this.data.money += n; if (n>0) this.data.stats.moneyEarned += n; this.save(); },
-  earn(n) { this.data.money += n; if (n>0) this.data.stats.moneyEarned += n; this.save(); },
+  // Единая точка изменения денег: после любой операции баланс в шапке
+  // обновляется СРАЗУ (real-time), без перезапуска экрана.
+  addMoney(n) { this.data.money = Math.max(0, this.data.money + n); if (n>0) this.data.stats.moneyEarned += n; this.save(); UI.renderHeader(); },
+  earn(n) { this.data.money = Math.max(0, this.data.money + n); if (n>0) this.data.stats.moneyEarned += n; this.save(); UI.renderHeader(); },
   spend(n) { if (this.data.money < n) return false; this.data.money -= n; this.data.stats.spent += n; this.save(); UI.renderHeader(); return true; },
   newUid() { return this.data.uidSeq++; },
 

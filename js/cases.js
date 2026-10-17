@@ -39,7 +39,7 @@ const Cases = {
         <div class="row counts" id="counts">${[1, 3, 5].map(n =>
           `<button class="btn small ${n === this.count ? '' : 'sec'}" data-n="${n}">×${n}</button>`).join('')}</div>
         <button class="btn big" id="do-open">Открыть за — ₽</button>
-        <div class="muted small" style="margin-top:8px">Баланс: <b id="cases-money">${fmtFull(d.money)} ₽</b> ·
+        <div class="muted small" style="margin-top:8px">Баланс: <b id="cases-money" data-money="full">${fmtFull(d.money)} ₽</b> ·
           свободных мест: <b>${Math.max(0, d.garageSlots - d.garage.length)}</b></div>
       </div>
       <div class="card"><h3>Состав кейса</h3><div class="odds-big" id="pool-list"></div></div>`;
