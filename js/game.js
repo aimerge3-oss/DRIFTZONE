@@ -1,4 +1,4 @@
-// DROPZONE: AUTO — логика, UI, кейсы-рулетка, экономика, гонки
+// DRIFTZONE — логика, UI, кейсы-рулетка, экономика, гонки
 'use strict';
 
 const $ = s => document.querySelector(s);
@@ -152,24 +152,41 @@ function rollCarCaseItem(cs) {
   return list[Math.floor(Math.random()*list.length)];
 }
 
-function openCarCase(caseId) {
+function openCarCase(caseId, count) {
+  count = count || 1;
   if (Roulette.busy) return;
   const cs = CAR_CASES.find(c=>c.id===caseId);
   const d = State.data;
-  if (!State.spend(cs.price)) { toast('Недостаточно денег'); return; }
-  d.stats.carCases++; addXp(XP_RULES.carCase,'carCase');
-  const win = rollCarCaseItem(cs);
+  if (d.garageSlots - d.garage.length < count) { toast('Свободных мест меньше, чем кейсов'); return; }
+  if (!State.spend(cs.price * count)) { toast('Недостаточно денег'); return; }
+  d.stats.carCases += count; addXp(XP_RULES.carCase*count,'carCase');
+  const wins = []; for (let i=0;i<count;i++) wins.push(rollCarCaseItem(cs));
+  const decoPool = CARS.filter(c=>!SECRET_IDS.includes(c.id));
   const deco = [];
-  for (let i=0;i<8;i++) deco.push(rtCarHtml(CARS[Math.floor(Math.random()*CARS.length)]));
-  State.save();
-  showRoulette(deco, rtCarHtml(win),
-    `<div class="big">${rarityTag(win.rarity)} ${esc(win.name)}</div><div class="muted">${money(win.price)}</div>`,
-    ()=>{
-      const e = giveCar(win.id);
-      checkCollectionRewards();
-      State.save(); refreshHeader(); renderTab();
-      if (e) toast(`${win.name} в гараже! 🚗`);
-    });
+  for (let i=0;i<8;i++) deco.push(rtCarHtml(decoPool[Math.floor(Math.random()*decoPool.length)]));
+  State.save(); haptic('medium');
+  if (count === 1) {
+    const win = wins[0];
+    showRoulette(deco, rtCarHtml(win),
+      `<div class="big">${rarityTag(win.rarity)} ${esc(win.name)}</div><div class="muted">${money(win.price)}</div>`,
+      ()=>{
+        const e = giveCar(win.id);
+        checkCollectionRewards();
+        State.save(); refreshHeader(); renderTab();
+        if (e) toast(`${win.name} в гараже! 🚗`);
+      });
+    return;
+  }
+  // ×3/×5 — сетка дропов вместо рулетки
+  window._caseDrops = wins.map(w=>w.id);
+  const grid = wins.map(w=>`<div class="card case-card">${rtCarHtml(w)}</div>`).join('');
+  openModal(`<h3>${cs.icon} ${cs.name} ×${count}</h3><div class="grid2">${grid}</div>
+    <div class="btns" style="margin-top:10px"><button class="btn" style="width:100%" onclick="takeCaseDrops()">Забрать все</button></div>`);
+}
+function takeCaseDrops() {
+  for (const id of window._caseDrops||[]) giveCar(id);
+  window._caseDrops = null;
+  checkCollectionRewards(); closeModal(); refreshHeader(); renderTab(); toast('Машины в гараже! 🚗');
 }
 
 // ===== Кейсы деталей =====
@@ -178,6 +195,14 @@ function rollPart(caseDef, slotFilter) {
   const lvls = caseDef.weights.map((w,i)=>({i,w})).filter(x=>x.w>0);
   const chosen = pickW(lvls);
   return { slot, lvl: chosen.i };
+}
+window._autoSell = null; // Set<string of level names> or null = выкл
+function toggleAutoSell(lvlName) {
+  if (window._autoSell === null) window._autoSell = new Set();
+  const s = window._autoSell;
+  s.has(lvlName) ? s.delete(lvlName) : s.add(lvlName);
+  if (!s.size) window._autoSell = null;
+  renderTab();
 }
 function openPartCase(caseId, count, slotFilter) {
   const d = State.data;
@@ -198,8 +223,30 @@ function openPartCase(caseId, count, slotFilter) {
   for (let i=0;i<8;i++) deco.push(rtPartHtml(rollPart(pc)));
   const resHtml = results.map(r=>`<div>${rarityTag(PART_LEVELS[r.lvl].r)} ${esc(partName(r.slot+'|'+r.lvl))}</div>`).join('');
   showRoulette(deco, rtPartHtml(results[0]), resHtml,
-    ()=>{ for (const r of results) givePart(r.slot, r.lvl); refreshHeader(); renderTab(); toast('Детали на складе 🔧'); });
+    ()=>{ finishPartDrop(results); });
   haptic('medium');
+}
+function finishPartDrop(results) {
+  const d = State.data; let sold = 0, kept = 0, sum = 0;
+  for (const r of results) {
+    const auto = window._autoSell && window._autoSell.has(PART_LEVELS[r.lvl].name);
+    if (auto) { sold++; sum += Math.floor(PART_LEVELS[r.lvl].price*ECON.sellShare); }
+    else { givePart(r.slot, r.lvl); kept++; }
+  }
+  if (sold) { d.money += sum; toast(`${kept} на склад, ${sold} продано +${money(sum)} 💸`); }
+  else toast('Детали на складе 🔧');
+  State.save(); refreshHeader(); renderTab();
+}
+function sellAllParts() {
+  const d = State.data; let sum = 0, n = 0;
+  for (const k of Object.keys(d.inventory)) {
+    const lvl = +k.split('|')[1];
+    sum += Math.floor(PART_LEVELS[lvl].price*ECON.sellShare) * d.inventory[k];
+    n += d.inventory[k]; delete d.inventory[k];
+  }
+  if (!n) { toast('Склад пуст'); return; }
+  d.money += sum; State.save(); refreshHeader(); renderTab();
+  toast(`Продано ${n} детал. за ${money(sum)} 💸`);
 }
 
 // ===== Продажа =====
@@ -278,6 +325,16 @@ function pickPartFor(uid, slotId) {
   openModal(`<h3>${PART_SLOTS.find(s=>s.id===slotId).name}</h3>` + opts.sort().map(k=>
     `<div class="card row"><div class="grow"><b style="color:${RARITY[PART_LEVELS[+k.split('|')[1]].r].color}">${partName(k)}</b><div class="muted">есть: ${d.inventory[k]}</div></div>
      <button class="btn small" onclick="installPart(${uid},'${slotId}','${k}')">Ставить</button></div>`).join(''));
+}
+
+function uninstallAll(uid) {
+  const d = State.data; const e = d.garage.find(x=>x.uid===uid); if(!e) return;
+  if (d.museum.includes(uid)) { toast('Машина в музее — нельзя снимать'); return; }
+  if (Date.now()-d.lastRemoveAt < 20*60e3) { toast('Перерыв 20 минут после снятия детали'); return; }
+  const slots = Object.keys(e.parts); if (!slots.length) return;
+  d.lastRemoveAt = Date.now();
+  for (const s of slots) { givePart(s+'|'+e.parts[s]); delete e.parts[s]; }
+  State.save(); openCarCard(uid); renderTab(); toast('Все детали сняты на склад 🔧');
 }
 
 // ===== Покраска (CSS-тонирование фото) =====
@@ -522,7 +579,8 @@ function startRace(uid, rivalId) {
   scr.classList.add('show');
   $('#race-lane-you .name').textContent = `${car.name} — ${myHp} л.с.`;
   $('#race-lane-you img').src = `img/cars/${car.id}.webp`;
-  const rc = CARS[Math.floor(Math.random()*CARS.length)];
+  const nonSecret = CARS.filter(c=>!SECRET_IDS.includes(c.id));
+  const rc = nonSecret[Math.floor(Math.random()*nonSecret.length)];
   $('#race-lane-riv .name').textContent = `Соперник — ${rivalHp} л.с.`;
   $('#race-lane-riv img').src = `img/cars/${rc.id}.webp`;
   $('#race-board .time').textContent = '0.000';
@@ -636,6 +694,7 @@ function openCarCard(uid) {
       ${PAINT_ENABLED && !NO_PAINT.includes(e.carId) && !inMus ? `<button class="btn sec" onclick="openPaint(${uid})">🎨 Покраска (${money(paintCost(e))})</button>`:''}
       ${inMus ? `<button class="btn sec" onclick="fromMuseum(${uid})">← Из музея</button>`
               : `<button class="btn sec" onclick="toMuseum(${uid})">🏛️ В музей</button>`}
+      ${Object.keys(e.parts).length && !inMus ? `<button class="btn sec" onclick="uninstallAll(${uid})">Снять все детали</button>`:''}
       ${!isSecret && !inMus ? `<button class="btn danger" onclick="sellCar(${uid})">Продать ${money(Math.floor(carValue(e)*ECON.sellShare))}</button>`:''}
     </div>
     <div class="muted" style="margin-top:8px">Ставятся детали не ниже класса ${raceClass(car.rarity)}. Снятие — перерыв 20 мин. В музее: +1% дохода за штуку, но доход не копится.</div>
@@ -645,9 +704,11 @@ function openCarCard(uid) {
 function viewCases() {
   let html = '<h2 class="sec">Кейсы машин</h2><div class="grid2">';
   for (const cs of CAR_CASES) {
-    html += `<div class="card case-card" onclick="openCarCase('${cs.id}')">
+    html += `<div class="card case-card">
       <div style="font-size:34px">${cs.icon}</div><b>${cs.name}</b>
-      <div class="muted">${money(cs.price)}</div></div>`;
+      <div class="muted">${money(cs.price)}</div>
+      <div class="btns" style="margin-top:8px">${[1,3,5].map(n=>`<button class="btn small ${n===1?'':'sec'}" onclick="event.stopPropagation();openCarCase('${cs.id}',${n})">×${n}</button>`).join('')}</div>
+    </div>`;
   }
   html += '</div><div class="muted" style="margin-top:8px">Из кейса не может выпасть машина дешевле половины его цены.</div>';
   return html;
@@ -660,6 +721,9 @@ function viewShop() {
     <button class="btn ${tab==='cases'?'':'sec'}" onclick="_shopTab='cases';renderTab()">Кейсы деталей</button>
     <button class="btn ${tab==='stock'?'':'sec'}" onclick="_shopTab='stock';renderTab()">Склад (${Object.values(d.inventory).reduce((a,b)=>a+b,0)})</button></div>`;
   if (tab==='cases') {
+    const as = window._autoSell;
+    html += `<div class="card"><b>Автопродажа</b><div class="muted">выпавшие детали этих уровней сразу продаются за 50%</div>
+      <div class="btns" style="margin-top:8px">${PART_LEVELS.map((l,i)=>`<button class="btn small ${as&&as.has(l.name)?'':'sec'}" onclick="toggleAutoSell('${l.name}')">${l.name}</button>`).join('')}</div></div>`;
     for (const pc of PART_CASES) {
       html += `<div class="card"><b>${pc.name}</b> — ${money(pc.price)}
         <div class="muted">Целевая деталь +15%${pc.topOnly?' (только случайная)':''}</div>
@@ -672,6 +736,7 @@ function viewShop() {
   } else {
     const keys = Object.keys(d.inventory).filter(k=>d.inventory[k]>0);
     if (!keys.length) html += '<div class="empty-hint">Склад пуст. Открой кейсы деталей! 🔧</div>';
+    else html += `<button class="btn danger" style="width:100%;margin-bottom:10px" onclick="sellAllParts()">Продать всё со склада</button>`;
     const groups = {};
     for (const k of keys) { const s=k.split('|')[0]; (groups[s] ||= []).push(k); }
     for (const s of PART_SLOTS.filter(x=>groups[x.id])) {

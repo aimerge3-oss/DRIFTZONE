@@ -1,4 +1,4 @@
-// DROPZONE: AUTO — данные и баланс. Все цифры меняются здесь.
+// DRIFTZONE — данные и баланс. Все цифры меняются здесь.
 'use strict';
 
 const DATA_VERSION = 1;
