@@ -8,16 +8,14 @@ const Workshop = {
   statsOf(car) {
     const def = carById(car.carId);
     const lvlMul = 1 + ((car.level || 1) - 1) * 0.05;
-    let mul = 1;
+    let add = 0;
     for (const slotId in (car.parts || {})) {
       const stage = car.parts[slotId];
       const s = PART_SLOTS.find(x => x.id === slotId);
-      if (s && stage) mul *= 1 + s.bonus * PART_LEVELS[stage - 1].share;
+      if (s && stage != null) add += s.bonus * PART_LEVELS[stage].share;
     }
-    return {
-      hp: Math.round(def.hp * lvlMul * mul),
-      power: Math.round(def.hp * lvlMul * mul),   // упрощённый Power Score для матчмейкинга
-    };
+    const hp = Math.round(def.hp * lvlMul * (1 + add));
+    return { hp, power: hp };
   },
 
   render(el) {
@@ -35,10 +33,10 @@ const Workshop = {
           `<option value="${c.uid}" ${c.uid === car.uid ? 'selected' : ''}>${carById(c.carId).name}</option>`).join('')}</select>
         <div class="row between"><b>${def.name}</b><span class="hp">⚡ ${st.hp} л.с.</span></div>
         <div class="slots">${PART_SLOTS.map(s => {
-          const stage = (car.parts || {})[s.id] || 0;
+          const stage = (car.parts || {})[s.id];
           return `<div class="slot" data-slot="${s.id}">
             <small>${s.name}</small>
-            <div class="slot-val ${stage ? 'filled' : ''}">${stage ? PART_LEVELS[stage - 1].r + ' · +' + Math.round(s.bonus * PART_LEVELS[stage - 1].share * 100) + '%' : 'пусто'}</div>
+            <div class="slot-val ${stage != null ? 'filled' : ''}">${stage != null ? PART_LEVELS[stage].r + ' · +' + Math.round(s.bonus * PART_LEVELS[stage].share * 100) + '%' : 'пусто'}</div>
           </div>`; }).join('')}
         </div>
         <button class="btn" id="upgrade">Улучшить до ур.${(car.level || 1) + 1} — ${fmt(Math.floor(def.price * 0.08 * (car.level || 1)))} ₽</button>
@@ -79,8 +77,8 @@ const Workshop = {
         catch (e) { UI.toast(errText(e)); return; }
       } else {
         d.inventory[r.dataset.pick]--;
-        car.parts = car.parts || {}; car.parts[slot] = Number(lvl) + 1;   // stage 1-based
-        d.stats.installs++; State.save();
+        car.parts = car.parts || {}; car.parts[slot] = Number(lvl);   // индекс PART_LEVELS (0..4) — как в ядре game.js
+        d.stats.installs++; addXp(XP_RULES.installPart, 'installPart'); checkQuests(); State.save(); UI.renderHeader();
       }
       UI.closeModal(); UI.go('workshop'); UI.haptic('light');
     });
@@ -100,9 +98,10 @@ const Workshop = {
       const chance = MERGE_CHANCE[PART_LEVELS[lvl].r] ?? 0.5;
       if (State.online) { UI.toast('Слияние на сервере: merge_parts'); return; }
       d.inventory[r.dataset.merge] -= 3;
-      if (Math.random() < chance) { d.inventory[slot + '|' + (Number(lvl) + 1)] = (d.inventory[slot + '|' + (Number(lvl) + 1)] || 0) + 1; d.stats.merges++; UI.toast('Слияние удалось! ⬆'); }
+      d.stats.merges++; addXp(XP_RULES.merge, 'merge');
+      if (Math.random() < chance) { d.inventory[slot + '|' + (Number(lvl) + 1)] = (d.inventory[slot + '|' + (Number(lvl) + 1)] || 0) + 1; UI.toast('Слияние удалось! ⬆'); }
       else UI.toast('Не удалось 😞');
-      State.save(); UI.closeModal(); UI.go('workshop');
+      checkQuests(); State.save(); UI.renderHeader(); UI.closeModal(); UI.go('workshop');
     });
   },
 
@@ -117,8 +116,8 @@ const Workshop = {
       return;
     }
     if (!State.spend(cost)) { UI.toast('Недостаточно денег'); return; }
-    car.level = lvl + 1; State.save();
-    UI.toast('Улучшено! Ур.' + car.level); UI.go('workshop');
+    car.level = lvl + 1; State.save(); UI.renderHeader();
+    UI.toast(`Улучшено до ур.${car.level}! −${fmt(cost)} ₽`); UI.go('workshop');
   },
 };
 

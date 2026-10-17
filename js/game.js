@@ -50,7 +50,7 @@ const Game = {
 };
 
 window.addEventListener('DOMContentLoaded', () => {
-  try { Game.boot(); }
+  try { UI.init(); Game.boot(); }
   catch (e) { console.error('[boot]', e); const m = document.getElementById('main'); if (m) m.innerHTML = '<div class="card empty">Ошибка запуска 😅</div>'; }
 });
 
@@ -120,7 +120,7 @@ function giveCar(carId, silent) {
   if (isNew) addXp(XP_RULES.newCar);
   if (!silent && !State.garageFree()) {
     const v = Math.floor(carById(carId).price * ECON.sellShare);
-    d.money += v; State.save();
+    State.earn(v); refreshHeader();
     toast(`Гараж полон — ${carById(carId).name} продана за ${money(v)}`);
     return null;
   }
@@ -140,82 +140,10 @@ function partName(key) {
 }
 
 // ===== Рулетка =====
-const Roulette = { busy:false };
-function showRoulette(decoHtmlList, winHtml, resultHtml, onDone) {
-  if (Roulette.busy) return; Roulette.busy = true;
-  const ov = $('#roulette-overlay'), strip = $('#rt-strip');
-  const N = 32, WIN = 26;
-  let html = '';
-  for (let i=0;i<N;i++) html += `<div class="rt-item">${i===WIN ? winHtml : decoHtmlList[i % decoHtmlList.length]}</div>`;
-  strip.innerHTML = html;
-  strip.style.transition = 'none'; strip.style.transform = 'translateX(0)';
-  ov.classList.add('show'); $('#rt-result').classList.remove('show');
-  requestAnimationFrame(()=>{
-    const itemW = 118;
-    const target = -(WIN*itemW - (ov.clientWidth/2 - itemW/2)) + rnd(-35,35);
-    strip.style.transition = 'transform 4.2s cubic-bezier(.12,.68,.16,1)';
-    strip.style.transform = `translateX(${target}px)`;
-  });
-  setTimeout(()=>{
-    Roulette.busy = false;
-    $('#rt-result').innerHTML = resultHtml;
-    $('#rt-result').classList.add('show');
-    $('#rt-take').onclick = () => { ov.classList.remove('show'); onDone && onDone(); };
-    haptic('heavy');
-  }, 4400);
-}
+// Единый честный движок прокрутки — RouletteFX (js/core.js). Старые дублирующие
+// реализации (showRoulette/openCarCase/takeCaseDrops) удалены: результат всегда
+// определяется ДО анимации, лента показывает ровно выпавшую машину.
 const rtCarHtml = car => `${carImg(car.id)}${rarityTag(car.rarity)}<div class="muted" style="font-size:11px">${esc(car.name)}</div>`;
-
-const SECRET_IDS = Object.values(SECRET_CARS); // секретки не дропают из кейсов
-function rollCarCaseItem(cs) {
-  const pool = CARS.filter(c => !SECRET_IDS.includes(c.id) && (cs.pool[c.rarity]||0) > 0 &&
-    (!cs.country || c.country===cs.country) && c.price >= cs.minPrice);
-  const byR = {};
-  for (const c of pool) (byR[c.rarity] ||= []).push(c);
-  const entries = Object.keys(byR).filter(r=>cs.pool[r]).map(r=>({r, w:cs.pool[r]}));
-  if (!entries.length) return pool[Math.floor(Math.random()*pool.length)] || CARS[0];
-  const chosen = pickW(entries);
-  const list = byR[chosen.r];
-  return list[Math.floor(Math.random()*list.length)];
-}
-
-function openCarCase(caseId, count) {
-  count = count || 1;
-  if (Roulette.busy) return;
-  const cs = CAR_CASES.find(c=>c.id===caseId);
-  const d = State.data;
-  const free = d.garageSlots - d.garage.length;
-  if (free < 1 || count > free) { toast(`Свободно мест: ${Math.max(0,free)} — уменьши количество`); return; }
-  if (!State.spend(cs.price * count)) { toast('Недостаточно денег'); return; }
-  d.stats.carCases += count; addXp(XP_RULES.carCase*count,'carCase');
-  const wins = []; for (let i=0;i<count;i++) wins.push(rollCarCaseItem(cs));
-  const decoPool = CARS.filter(c=>!SECRET_IDS.includes(c.id));
-  const deco = [];
-  for (let i=0;i<8;i++) deco.push(rtCarHtml(decoPool[Math.floor(Math.random()*decoPool.length)]));
-  State.save(); haptic('medium');
-  if (count === 1) {
-    const win = wins[0];
-    showRoulette(deco, rtCarHtml(win),
-      `<div class="big">${rarityTag(win.rarity)} ${esc(win.name)}</div><div class="muted">${money(win.price)}</div>`,
-      ()=>{
-        const e = giveCar(win.id);
-        checkCollectionRewards();
-        State.save(); refreshHeader(); renderTab();
-        if (e) toast(`${win.name} в гараже! 🚗`);
-      });
-    return;
-  }
-  // ×3/×5 — сетка дропов вместо рулетки
-  window._caseDrops = wins.map(w=>w.id);
-  const grid = wins.map(w=>`<div class="card case-card">${rtCarHtml(w)}</div>`).join('');
-  openModal(`<h3>${cs.icon} ${cs.name} ×${count}</h3><div class="grid2">${grid}</div>
-    <div class="btns" style="margin-top:10px"><button class="btn" style="width:100%" onclick="takeCaseDrops()">Забрать все</button></div>`);
-}
-function takeCaseDrops() {
-  for (const id of window._caseDrops||[]) giveCar(id);
-  window._caseDrops = null;
-  checkCollectionRewards(); closeModal(); refreshHeader(); renderTab(); toast('Машины в гараже! 🚗');
-}
 
 // ===== Кейсы деталей =====
 function rollPart(caseDef, slotFilter) {
@@ -249,9 +177,28 @@ function openPartCase(caseId, count, slotFilter) {
   const rtPartHtml = r => `<div style="font-size:26px">🔧</div><div style="font-weight:800;color:${RARITY[PART_LEVELS[r.lvl].r].color}">${PART_LEVELS[r.lvl].name}</div><div class="muted" style="font-size:10px">${esc(PART_SLOTS.find(x=>x.id===r.slot).name)}</div>`;
   const deco = [];
   for (let i=0;i<8;i++) deco.push(rtPartHtml(rollPart(pc)));
-  const resHtml = results.map(r=>`<div>${rarityTag(PART_LEVELS[r.lvl].r)} ${esc(partName(r.slot+'|'+r.lvl))}</div>`).join('');
-  showRoulette(deco, rtPartHtml(results[0]), resHtml,
-    ()=>{ finishPartDrop(results); });
+  // обёртка: детали крутятся тем же честным движком (показ = результат)
+  RouletteFX.busy = true;
+  const ovEl = $('#roulette-overlay'), stripEl = $('#rt-strip'), resEl = $('#rt-result');
+  resEl.classList.remove('show'); resEl.innerHTML = '';
+  let phtml = '';
+  for (let i=0;i<RouletteFX.N;i++) phtml += `<div class="rt-item">${i===RouletteFX.WIN ? rtPartHtml(results[0]) : deco[i % deco.length]}</div>`;
+  stripEl.innerHTML = phtml;
+  stripEl.style.transition='none'; stripEl.style.transform='translateX(0)';
+  ovEl.classList.add('show');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const jitter = (Math.random()-0.5)*(RouletteFX.ITEM_W-34);
+    const target = -(RouletteFX.WIN*RouletteFX.ITEM_W - (ovEl.clientWidth/2 - RouletteFX.ITEM_W/2)) + jitter;
+    stripEl.style.transition = 'transform 4.2s cubic-bezier(.12,.68,.16,1)';
+    stripEl.style.transform = `translateX(${target}px)`;
+  }));
+  setTimeout(()=>{
+    RouletteFX.busy = false;
+    resEl.innerHTML = results.map(r=>`<div class="drop-line">${rarityTag(PART_LEVELS[r.lvl].r)} <b>${esc(partName(r.slot+'|'+r.lvl))}</b></div>`).join('');
+    resEl.classList.add('show');
+    $('#rt-take').onclick = () => { ovEl.classList.remove('show'); finishPartDrop(results); };
+    haptic('heavy');
+  }, 4400);
   haptic('medium');
 }
 function finishPartDrop(results) {
@@ -261,7 +208,7 @@ function finishPartDrop(results) {
     if (auto) { sold++; sum += Math.floor(PART_LEVELS[r.lvl].price*ECON.sellShare); }
     else { givePart(r.slot, r.lvl); kept++; }
   }
-  if (sold) { d.money += sum; toast(`${kept} на склад, ${sold} продано +${money(sum)} 💸`); }
+  if (sold) { State.earn(sum); UI.animateMoney(sum); toast(`${kept} на склад, ${sold} продано +${money(sum)} 💸`); }
   else toast('Детали на складе 🔧');
   State.save(); refreshHeader(); renderTab();
 }
@@ -273,7 +220,7 @@ function sellAllParts() {
     n += d.inventory[k]; delete d.inventory[k];
   }
   if (!n) { toast('Склад пуст'); return; }
-  d.money += sum; State.save(); refreshHeader(); renderTab();
+  State.earn(sum); State.save(); refreshHeader(); renderTab();
   toast(`Продано ${n} детал. за ${money(sum)} 💸`);
 }
 
@@ -290,7 +237,7 @@ function sellCar(uid) {
   const v = Math.floor(carValue(e)*ECON.sellShare);
   d.garage.splice(idx,1); delete d.carFuel[uid];
   d.museum = d.museum.filter(u=>u!==uid);
-  d.money += v; State.save(); closeModal(); refreshHeader(); renderTab();
+  State.earn(v); State.save(); closeModal(); refreshHeader(); renderTab();
   toast(`Продано за ${money(v)} 💸`);
 }
 function sellPart(key) {
@@ -299,7 +246,7 @@ function sellPart(key) {
   const lvl = +key.split('|')[1];
   const v = Math.floor(PART_LEVELS[lvl].price * ECON.sellShare);
   inv[key]--; if (!inv[key]) delete inv[key];
-  State.data.money += v; State.save(); refreshHeader(); renderTab();
+  State.earn(v); State.save(); refreshHeader(); renderTab();
   toast(`${partName(key)} → +${money(v)}`);
 }
 
@@ -463,10 +410,10 @@ function openRewardCase() {
   if (!rewardReady()) { toast('Кейс наград будет готов через ' + rewardCdText()); return; }
   d.rewardCaseAt = Date.now();
   const r = pickW(ECON.rewardCase);
-  if (r.type==='money') { const inc = Math.max(20000, pendingIncome()); d.money += inc; toast('🎁 Кейс наград: ' + money(inc)); }
+  if (r.type==='money') { const inc = Math.max(20000, pendingIncome()); Game.credit(inc); toast('🎁 Кейс наград: ' + money(inc)); UI.animateMoney(inc); }
   else if (r.type==='part') { const p = rollPart(PART_CASES[1]); givePart(p.slot,p.lvl); toast('🎁 Кейс наград: ' + partName(p.slot+'|'+p.lvl)); }
   else if (r.type==='fuel') { d.fuel = RACE.fuelMax; toast('🎁 Кейс наград: полный бак ⛽'); }
-  else { const w = rollCarCaseItem(CAR_CASES[1]); giveCar(w.id); toast('🎁 Кейс наград: ' + w.name); }
+  else { const w = rollCarFromCase(CAR_CASES[1]); giveCar(w.id); toast('🎁 Кейс наград: ' + w.name); refreshHeader(); }
   checkCollectionRewards();
   State.save(); refreshHeader(); renderTab(); updateGiftDot();
 }
@@ -656,7 +603,7 @@ Object.assign(window, {
   Game, startRace, closeRace, collectIncome, sellCar, sellPart, sellAllParts, mergeParts,
   installPart, uninstallAll, pickPartFor, removePart, doPaint, openPaint, paintCost,
   toMuseum, fromMuseum, buyMuseumSlot, buyGarageSlot, openRewardCase, openRewards,
-  claimCountryReward, toggleAutoSell, openCarCase, openPartCase, takeCaseDrops,
+  claimCountryReward, toggleAutoSell, openPartCase,
   // алиасы совместимости с модулями garage/races/profile
   _garageCollect: () => Garage.collectAll(),
   _raceStart: (t) => Races.start(t),

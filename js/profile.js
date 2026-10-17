@@ -51,18 +51,28 @@ const Profile = {
     d.daily.streak = d.daily.lastDay === y ? d.daily.streak + 1 : 0;
     d.daily.lastDay = today;
     const reward = ECON.dailyBonus[d.daily.streak % ECON.dailyBonus.length];
-    if (reward.money) State.earn(reward.money);
-    if (reward.parts) for (let i = 0; i < reward.parts[1]; i++) Cases.openPartLocal && Cases.openPartLocal(reward.parts[0]);
-    State.save(); UI.toast('Награда получена 🎁'); UI.go('profile');
+    if (reward.money) { State.earn(reward.money); UI.animateMoney(reward.money); }
+    // детали из ежедневки приходят на склад по весам кейса (без платного открытия)
+    if (reward.parts) {
+      const pc = PART_CASES.find(p => p.id === reward.parts[0]);
+      for (let i = 0; i < reward.parts[1]; i++) {
+        const r = rollPart(pc);
+        givePart(r.slot, r.lvl);
+      }
+    }
+    addXp(XP_RULES.daily);
+    State.save(); UI.renderHeader(); UI.go('profile');
   },
 
   claimQuest(id) {
     const d = State.data;
     const q = QUESTS_NEWBIE.find(x => x.id === id);
     if (!q || !q.check(d) || d.questsDone[id]) return;
-    d.questsDone[id] = true; State.earn(q.reward);
-    d.xp += XP_RULES.questMin; State.save();
-    UI.toast('Квест выполнен: +' + fmt(q.reward) + ' ₽'); UI.go('profile');
+    d.questsDone[id] = true;
+    State.earn(q.reward);
+    addXp(XP_RULES.questMin);          // уровень/подарок за опыт считает ядро
+    State.save(); UI.renderHeader(); UI.animateMoney(q.reward);
+    UI.go('profile');
   },
 
   async redeemPromo() {
@@ -78,7 +88,7 @@ const Profile = {
     if (LOCAL[code.toUpperCase()]) {
       if (State.data.promoUsed && State.data.promoUsed[code]) { UI.toast('Уже использован'); return; }
       State.data.promoUsed = State.data.promoUsed || {}; State.data.promoUsed[code] = true;
-      State.earn(LOCAL[code.toUpperCase()]); UI.toast('+' + fmt(LOCAL[code]) + ' ₽');
+      State.earn(LOCAL[code.toUpperCase()]); UI.renderHeader(); UI.animateMoney(LOCAL[code.toUpperCase()]);
     } else UI.toast('Код не найден (в онлайне проверка на сервере)');
     UI.go('profile');
   },

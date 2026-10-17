@@ -52,7 +52,7 @@ const State = {
   // ===== helpers =====
   addMoney(n) { this.data.money += n; if (n>0) this.data.stats.moneyEarned += n; this.save(); },
   earn(n) { this.data.money += n; if (n>0) this.data.stats.moneyEarned += n; this.save(); },
-  spend(n) { if (this.data.money < n) return false; this.data.money -= n; this.data.stats.spent += n; return true; },
+  spend(n) { if (this.data.money < n) return false; this.data.money -= n; this.data.stats.spent += n; this.save(); UI.renderHeader(); return true; },
   newUid() { return this.data.uidSeq++; },
 
   // добавление машины в гараж (используется модулями garage/cases/admin)

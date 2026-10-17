@@ -20,6 +20,12 @@ const UI = {
 
   register(id, renderFn) { this.screens[id] = renderFn; },
 
+  init() {
+    // офлайн-режим: без Telegram и без сервера игра полностью локальна (localStorage)
+    if (!tg) State.online = false;
+    setInterval(() => { if (this.current === 'garage') this.refresh(); }, 60000);
+  },
+
   go(id) {
     if (!this.screens[id]) return;
     this.current = id;
@@ -48,6 +54,8 @@ const UI = {
     State.refreshFuel && State.refreshFuel();
     const d = State.data;
     document.getElementById('hdr-money').textContent = fmt(d.money) + ' ₽';
+    const full = document.getElementById('hdr-money-full');
+    if (full) full.textContent = fmtFull(d.money) + ' ₽';
     // аватар = кольцо опыта + бейдж уровня (как в оригинале)
     const av = document.getElementById('hdr-avatar');
     if (av) {
@@ -84,6 +92,26 @@ const UI = {
     t.textContent = msg; t.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  },
+
+  // всплывающий «+N ₽» над балансом + анимация счётчика (обратная связь по деньгам)
+  animateMoney(delta) {
+    const el = document.getElementById('hdr-money');
+    if (!el) return;
+    const from = Math.max(0, State.data.money - delta), to = State.data.money;
+    const float = document.createElement('div');
+    float.className = 'money-float';
+    float.textContent = '+' + fmt(delta) + ' ₽';
+    el.parentElement.appendChild(float);
+    setTimeout(() => float.remove(), 1200);
+    const t0 = performance.now(), dur = 600;
+    const step = now => {
+      const k = Math.min(1, (now - t0) / dur);
+      el.textContent = fmt(from + (to - from) * k) + ' ₽';
+      if (k < 1) requestAnimationFrame(step);
+      else el.textContent = fmt(to) + ' ₽';
+    };
+    requestAnimationFrame(step);
   },
 
   modal(html, onOpen) {

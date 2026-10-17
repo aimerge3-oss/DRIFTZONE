@@ -10,7 +10,24 @@ const Garage = {
     return Math.floor(def.price * ECON.incomePerHour * elapsed * (1 + ((car.level || 1) - 1) * 0.05));
   },
 
-  totalPending() { return State.data.garage.reduce((a, c) => a + this.incomeOf(c), 0); },
+  // доход в час по всему гаражу (для шкалы и подписи)
+  incomePerHour() {
+    const d = State.data;
+    let per = 0;
+    for (const c of d.garage) {
+      const def = carById(c.carId); if (!def) continue;
+      per += carValue(c) * ECON.incomePerHour * (1 + ((c.level || 1) - 1) * 0.05);
+    }
+    return per * (1 + 0.01 * d.museum.length);
+  },
+  // накоплено: та же формула, что и pendingIncome() в game.js (кап 4 ч, витрина +1%/машина)
+  totalPending() { return pendingIncome(); },
+  // прогресс заполнения шкалы (0..1): максимум накопления достигнут?
+  fillRatio() {
+    const per = this.incomePerHour();
+    if (per <= 0) return 0;
+    return Math.min(1, this.totalPending() / (per * ECON.incomeCapHours));
+  },
 
   async collectAll() {
     if (State.online) {
@@ -27,17 +44,26 @@ const Garage = {
     State.data.stats.incomeCollected += sum;
     for (const c of State.data.garage) c.incomeAt = Date.now();
     State.save();
-    UI.toast('+' + fmt(sum) + ' ₽');
+    UI.renderHeader();
+    UI.animateMoney(sum);
+    checkQuests();
     UI.go('garage');
   },
 
   render(el) {
     const d = State.data;
     const pending = this.totalPending();
+    const perHour = this.incomePerHour();
+    const ratio = this.fillRatio();
     el.innerHTML = `
       <div class="card income-card">
-        <div>Доход гаража: <b>${fmt(pending)} ₽</b> <small>(кап ${ECON.incomeCapHours}ч)</small></div>
-        <button class="btn" id="collect">Забрать всё</button>
+        <div class="row between">
+          <div><small class="muted">Накоплено</small><div class="big">${fmtFull(pending)} ₽</div></div>
+          <div style="text-align:right"><small class="muted">Доход в час</small><div><b>${fmt(perHour)} ₽/ч</b></div></div>
+        </div>
+        <div class="progress"><i style="width:${(ratio*100).toFixed(1)}%"></i></div>
+        <button class="btn" id="collect" ${pending > 0 ? '' : 'disabled'}>Забрать</button>
+        <small class="muted">Максимум накопления — ${ECON.incomeCapHours} ч офлайн. Витрина: +${State.data.museum.length}% к доходу.</small>
       </div>
       <div class="grid cars-grid">${d.garage.length ? '' : '<div class="empty">Гараж пуст — открой кейс 📦</div>'}</div>`;
     const grid = el.querySelector('.cars-grid');

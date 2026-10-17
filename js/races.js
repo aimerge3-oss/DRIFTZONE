@@ -45,7 +45,7 @@ const Races = {
         rival: { carId: rivalDef.id, power: rivalPower }, you: { power: myPower },
       };
       d.stats.races++; if (win) d.stats.wins++;
-      State.earn(result.reward); State.save();
+      State.earn(result.reward); State.save(); UI.renderHeader(); UI.animateMoney(result.reward);
     }
     this.animateRace(car, result);
   },
