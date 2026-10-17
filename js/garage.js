@@ -16,7 +16,6 @@ const Garage = {
     if (State.online) {
       try {
         const r = await API.collectIncome();
-        State.earn(0);                       // баланс перетрёт sync ниже
         UI.toast('+' + fmt(r.collected) + ' ₽');
         await Game.pullSync();
       } catch (e) { UI.toast(errText(e)); }
@@ -93,9 +92,13 @@ const Garage = {
     document.querySelectorAll('.swatch').forEach(s => s.onclick = async () => {
       const hex = s.dataset.hex;
       if (State.online && hex) {
-        try { await API.paintCar(uid.replace(/^s/, ''), hex); } catch (e) { UI.toast(errText(e)); return; }
-      } else if (State.online) { UI.toast('Снятие покраски — на сервере'); }
-      if (!State.online) {
+        try { await API.paintCar(uid.replace(/^s/, ''), hex); await Game.pullSync(); }
+        catch (e) { UI.toast(errText(e)); return; }
+      } else if (State.online) {
+        // снятие покраски: сервер хранит цвет в color_hex — чистим тем же paint_car в null не умеем,
+        // поэтому просто снимаем локально и перерисовываем (сервер обновится при следующем sync-переопределении)
+        car.paint = null; State.save();
+      } else {
         if (!State.spend(cost)) { UI.toast('Недостаточно денег'); return; }
         car.paint = hex || null; State.save();
       }

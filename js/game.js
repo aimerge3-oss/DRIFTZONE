@@ -107,12 +107,14 @@ function addXp(n, kind) {
     const gift = levelGift(d.level); d.money += gift;
     toast(`Уровень ${d.level}! Подарок ${money(gift)} 🎉`);
   }
-  State.save(); renderHeaderAvatar();
+  State.save(); UI.renderHeader();   // аватар с кольцом XP рисует ui.js
 }
 
 // ===== Выдача =====
 function giveCar(carId, silent) {
   const d = State.data;
+  // защита: выдача только валидных машин (админ-ввод / битые id не должны плодить «призраков»)
+  if (!carById(carId)) return null;
   const isNew = !d.collection[carId];
   d.collection[carId] = true;
   if (isNew) addXp(XP_RULES.newCar);
@@ -182,7 +184,8 @@ function openCarCase(caseId, count) {
   if (Roulette.busy) return;
   const cs = CAR_CASES.find(c=>c.id===caseId);
   const d = State.data;
-  if (d.garageSlots - d.garage.length < count) { toast('Свободных мест меньше, чем кейсов'); return; }
+  const free = d.garageSlots - d.garage.length;
+  if (free < 1 || count > free) { toast(`Свободно мест: ${Math.max(0,free)} — уменьши количество`); return; }
   if (!State.spend(cs.price * count)) { toast('Недостаточно денег'); return; }
   d.stats.carCases += count; addXp(XP_RULES.carCase*count,'carCase');
   const wins = []; for (let i=0;i<count;i++) wins.push(rollCarCaseItem(cs));
@@ -517,6 +520,9 @@ function checkQuests() {
 }
 
 // ===== Модалки =====
+// Карточка машины в гараже (вызывается после установки/снятия детали и покраски).
+// Полноценный рендер карточки делает Garage — просто закрываем модалку.
+function openCarCard(uid) { closeModal(); }
 
 function openProfile() {
   const d = State.data;

@@ -98,29 +98,63 @@ const Cases = {
     return cand[Math.floor(Math.random() * cand.length)].id;
   },
 
+  // Анимация рулетки: лента-деко + выигрыш на позиции WIN (тот же движок, что в game.js)
+  _spinStrip(stripEl, winHtml, decoHtmlList, onDone) {
+    const N = 32, WIN = 26, itemW = 118;
+    let html = '';
+    for (let i = 0; i < N; i++) html += `<div class="rt-item">${i === WIN ? winHtml : decoHtmlList[i % decoHtmlList.length]}</div>`;
+    stripEl.innerHTML = html;
+    stripEl.style.transition = 'none';
+    stripEl.style.transform = 'translateX(0)';
+    requestAnimationFrame(() => {
+      const ov = document.getElementById('roulette-overlay');
+      const target = -(WIN * itemW - (ov.clientWidth / 2 - itemW / 2)) + (Math.random() * 70 - 35);
+      stripEl.style.transition = 'transform 4.2s cubic-bezier(.12,.68,.16,1)';
+      stripEl.style.transform = `translateX(${target}px)`;
+    });
+    setTimeout(onDone, 4400);
+  },
+
   showResults(drops, soldTotal) {
+    const ov = document.getElementById('roulette-overlay');
     const strip = document.getElementById('rt-strip');
-    strip.innerHTML = drops.map(dr => {
-      const def = carById(dr.carId);
-      return `<div class="rt-item" style="border-color:${RARITY[def.rarity].color}">
-        <img src="img/cars/${def.id}.webp"><small>${def.name}${dr.sold ? ' 💰' + fmt(dr.price) : ''}</small></div>`;
-    }).join('');
-    document.getElementById('roulette-overlay').classList.add('open');
-    document.getElementById('rt-result').innerHTML =
-      drops.length > 1 ? `<b>${drops.length}</b> дропов${soldTotal ? `, продано на ${fmt(soldTotal)} ₽` : ''}`
-                       : carById(drops[0].carId).name;
+    const res = document.getElementById('rt-result');
+    res.classList.remove('show'); res.innerHTML = '';
+    const best = drops.reduce((a, b) =>
+      R_ORDER.indexOf(carById(b.carId).rarity) > R_ORDER.indexOf(carById(a.carId).rarity) ? b : a);
+    const winHtml = (() => {
+      const def = carById(best.carId);
+      return `<img class="car-img" src="img/cars/${def.id}.webp" alt="">
+        <span class="tag" style="background:${RARITY[def.rarity].color}">${def.rarity}</span>
+        <div class="muted" style="font-size:11px">${def.name}</div>`;
+    })();
+    const decoPool = CARS.filter(c => !Object.values(SECRET_CARS).includes(c.id));
+    const deco = [];
+    for (let i = 0; i < 8; i++) {
+      const c = decoPool[Math.floor(Math.random() * decoPool.length)];
+      deco.push(`<img class="car-img" src="img/cars/${c.id}.webp" alt=""><span class="tag" style="background:${RARITY[c.rarity].color}">${c.rarity}</span><div class="muted" style="font-size:11px">${c.name}</div>`);
+    }
+    ov.classList.add('show');
     UI.haptic('medium');
-    document.getElementById('rt-take').onclick = () => {
-      document.getElementById('roulette-overlay').classList.remove('open');
-      UI.go('garage');
-    };
+    this._spinStrip(strip, winHtml, deco, () => {
+      res.innerHTML = drops.map(dr => {
+        const def = carById(dr.carId);
+        return `<div><span class="tag" style="background:${RARITY[def.rarity].color}">${def.rarity}</span> ${def.name}${dr.sold ? ' 💰 ' + fmt(dr.price) + ' ₽' : ''}</div>`;
+      }).join('') + (soldTotal ? `<div class="muted">Продано на ${fmt(soldTotal)} ₽</div>` : '');
+      res.classList.add('show');
+      document.getElementById('rt-take').onclick = () => {
+        ov.classList.remove('show');
+        UI.go('garage');
+      };
+    });
   },
 
   async openPart(partCaseId) {
     const pc = PART_CASES.find(p => p.id === partCaseId);
     if (State.online) {
       try { const r = await API.openPartCase(pc.id);
-        UI.toast(`Выпала: ${PART_SLOTS.find(s=>s.id===r.part.slot).name} [${r.part.rarity}]`);
+        const slotName = (PART_SLOTS.find(s => s.id === r.part.slot) || {}).name || r.part.slot;
+        UI.toast(`Выпала: ${slotName} [${r.part.rarity}]`);
         await Game.pullSync();
       } catch (e) { UI.toast(errText(e)); }
       return;
