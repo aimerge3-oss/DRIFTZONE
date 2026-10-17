@@ -2,7 +2,7 @@
 'use strict';
 
 const State = {
-  key: 'dropzone_save_v1',
+  key: 'driftzone_save_v1',
   data: null,
 
   fresh() {

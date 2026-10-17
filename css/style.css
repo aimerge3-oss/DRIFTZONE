@@ -1,4 +1,4 @@
-/* DROPZONE: AUTO — минимализм на цветах темы Telegram */
+/* DRIFTZONE — минимализм на цветах темы Telegram */
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 :root {
   --bg: var(--tg-theme-bg-color, #ffffff);
