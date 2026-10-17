@@ -159,7 +159,7 @@ const RACE = {
 
 // Экономика
 const ECON = {
-  startMoney: 50000, incomePerHour: 0.03, incomeCapHours: 4, sellShare: 0.5,
+  startMoney: 50000, incomePerHour: 0.03, incomeCapHours: 4, sellShare: 0.125, // продажа машины = 12.5% цены: кейсы не печатают деньги (EV < цены)
   garageStart: 6, garageMax: 30, slotPrice7: 100000,
   museumSlots: 4, museumPrice: 500000, museumMax: 20,
   paintShare: 0.05, paintMin: 5000, rewardCaseHours: 4,
