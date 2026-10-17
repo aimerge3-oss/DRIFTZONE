@@ -57,4 +57,34 @@ const State = {
   slotPrice(nthSlot) { // цена N-го места (7-е = 100К, далее ×2)
     return ECON.slotPrice7 * Math.pow(2, nthSlot - 7);
   },
+
+  // ===== интеграция с сервером (Cloudflare Worker API) =====
+  autoSellBelow: null,   // настройка авто-продажи редкости ('D'..'S' или null)
+  server: null,          // последний снапшот API
+
+  // применяем серверный снимок поверх локального мира (сервер — источник истины)
+  applyServer(snap) {
+    if (!snap || !snap.user) return;
+    this.server = snap;
+    const d = this.data;
+    d.money = snap.user.balance; d.stars = snap.user.stars || 0;
+    d.level = snap.user.level; d.xp = snap.user.xp;
+    d.fuel = snap.user.fuel; d.fuelAt = snap.user.fuel_last_update * 1000;
+    d.garage = snap.cars.map(c => ({
+      uid: 's' + c.id, carId: c.car_id, level: c.level, parts: {}, paint: null,
+      incomeAt: c.income_at * 1000,
+    }));
+    for (const p of snap.parts) {
+      if (p.equipped_to_car_id) {
+        const g = d.garage.find(x => x.uid === 's' + p.equipped_to_car_id);
+        if (g) g.parts[p.part_id] = p.stage;
+      } else {
+        const k = p.part_id + '|' + p.stage;
+        d.inventory[k] = (d.inventory[k] || 0) + 1;
+      }
+    }
+    for (const c of d.garage) d.collection[c.carId] = true;
+    this.save();
+  },
+  get online() { return typeof API !== 'undefined' && !API.offline && !!tg && !!tg.initData; },
 };
