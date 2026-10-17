@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>DROPZONE: AUTO</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="avatar" id="hdr-avatar"></div>
+      <div class="title">DROPZONE: AUTO</div>
+      <div class="money" id="hdr-money">0 ₽</div>
+      <button class="gift-btn" title="Награды">🎁<span class="dot"></span></button>
+    </header>
+
+    <main id="main"></main>
+
+    <nav id="nav"></nav>
+  </div>
+
+  <!-- Рулетка кейсов -->
+  <div id="roulette-overlay">
+    <div class="rt-strip-wrap"><div class="rt-marker"></div><div class="rt-strip" id="rt-strip"></div></div>
+    <div class="rt-result" id="rt-result"></div>
+    <button class="btn" id="rt-take">Забрать</button>
+  </div>
+
+  <!-- Модалка -->
+  <div class="modal-wrap" id="modal">
+    <div class="modal">
+      <div class="row" style="margin-bottom:6px"><div class="grow"></div>
+        <button class="btn small sec" id="modal-close">✕</button></div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Гонка -->
+  <div id="race-screen">
+    <div id="race-board"><div class="time">0.000</div><div class="dist">0 м / 402</div></div>
+    <div class="lane" id="race-lane-you"><div class="name"></div><img src="" alt=""><div class="bar"><i></i></div></div>
+    <div class="lane" id="race-lane-riv"><div class="name"></div><img src="" alt=""><div class="bar"><i></i></div></div>
+    <div class="speedo">скорость <b>0</b> км/ч</div>
+    <div id="traffic"><div class="light"></div><div class="label">Готовьсь...</div></div>
+    <div id="race-finish" class="hidden" style="text-align:center;padding:10px"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
