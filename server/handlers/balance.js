@@ -2,7 +2,7 @@
 // Все изменения денег идут через атомарные UPDATE с условием достаточности средств:
 // UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?
 // Если changes===0 — средств не хватило, откатываем batch целиком.
-import { CARS, ECON, sellPrice } from '../game_data.js';
+import { CARS, ECON, sellPrice, PART_LEVELS } from '../game_data.js';
 
 export async function ensureUser(db, tgUser) {
   const row = await db.prepare('SELECT * FROM users WHERE telegram_id = ?')
@@ -77,7 +77,14 @@ export async function sellCar(env, tgUser, carUid) {
   if (!car) throw new Error('car_not_found');
   const def = CARS[car.car_id];
   if (!def) throw new Error('unknown_car');
-  const price = sellPrice(def);
+  // в машине могут стоять детали — их стоимость учитываем при продаже (как на клиенте)
+  const eqParts = await db.prepare('SELECT stage FROM user_parts WHERE equipped_to_car_id = ?').bind(carUid).all();
+  let withParts = def.price;
+  for (const p of eqParts.results) {
+    const pl = PART_LEVELS[p.stage - 1];
+    if (pl) withParts += pl.price;
+  }
+  const price = Math.floor(withParts * ECON.sellShare);
   const batch = await db.batch([
     db.prepare('DELETE FROM user_cars WHERE id = ? AND user_id = ?').bind(carUid, u.id),
     db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').bind(price, u.id),
@@ -155,9 +162,8 @@ export async function upgradeCar(db, tgUser, carUid) {
   if (car.level >= 10) throw new Error('max_level');
   const def = CARS[car.car_id];
   const cost = Math.floor(def.price * 0.08 * car.level);        // L1→2: 8% цены, L9→10: 72%
-  // XP машины: сервер начисляет +25 за победу в гонке; на L1xp не нужен, дальше растёт
-  const xpNeed = car.level === 1 ? 0 : Math.round(50 * Math.pow(car.level - 1, 1.5));
-  if (car.current_xp < xpNeed) throw new Error('need_car_xp:' + xpNeed);
+  // XP машины не блокирует апгрейд на клиенте — требуем только деньги (иначе 'need_car_xp' утонул бы в toast)
+  const xpNeed = 0;
   const paid = await db.batch([
     db.prepare('UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?').bind(cost, u.id, cost),
     db.prepare('UPDATE user_cars SET level = level + 1, current_xp = current_xp - ? WHERE id = ?').bind(xpNeed, carUid),

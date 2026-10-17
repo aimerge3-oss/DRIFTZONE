@@ -150,3 +150,64 @@ h2.sec:first-child { margin-top: 0; }
 .empty-hint { text-align: center; color: var(--hint); padding: 30px 10px; }
 .stat-line { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .stat-line:last-child { border: none; }
+
+/* ===== стили для экранов модулей (garage/cases/workshop/profile) ===== */
+.row.between { justify-content: space-between; }
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 8px; }
+.empty { grid-column: 1 / -1; text-align: center; color: var(--hint); padding: 24px 10px; }
+.input {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 12px; font-size: 14px; color: var(--text); outline: none; min-width: 0;
+}
+.input:focus { border-color: var(--accent); }
+select.input { appearance: none; width: 100%; margin-bottom: 8px; }
+
+.income-card { display: flex; flex-direction: column; gap: 10px; }
+.cars-grid { grid-template-columns: repeat(2, 1fr); }
+.car-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 10px; display: flex; flex-direction: column; gap: 6px;
+}
+.car-card img { width: 100%; height: 74px; object-fit: contain; filter: drop-shadow(0 6px 8px rgba(0,0,0,.25)); }
+.car-card .rarity { font-size: 11px; font-weight: 800; }
+.car-card .name { font-size: 13px; font-weight: 700; }
+.car-card .inc { font-size: 12px; color: var(--accent); font-weight: 700; }
+
+.case-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 8px; background: var(--card); }
+.case-card .icon { font-size: 26px; }
+.case-card .cname { font-weight: 700; font-size: 13px; margin-top: 4px; }
+.case-card .cprice { font-size: 13px; color: var(--accent); font-weight: 700; }
+.case-card .odds { font-size: 10px; margin-top: 4px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.case-card.part { cursor: pointer; }
+.odds-big { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 13px; }
+.counts { margin: 10px 0; }
+.total { margin: 8px 0 12px; font-size: 14px; }
+.btn.big { width: 100%; padding: 13px; font-size: 15px; }
+
+.hp { color: var(--accent); white-space: nowrap; }
+.slot-val { font-weight: 800; font-size: 12px; margin-top: 4px; color: var(--hint); }
+.slot-val.filled { color: var(--text); }
+.inv-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer;
+}
+.inv-row:last-child { border-bottom: none; }
+#inv button { margin-top: 8px; }
+
+.xpbar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+.xpbar i { display: block; height: 100%; background: linear-gradient(90deg, #38bdf8, #a78bfa); }
+.quest { cursor: pointer; }
+.quest b { white-space: nowrap; }
+.quest.ready b { color: var(--accent); }
+.quest.claimed { opacity: .5; cursor: default; }
+.small { font-size: 12px; }
+
+.tiers { margin-top: 8px; }
+.tier { flex: 1; text-align: center; line-height: 1.25; }
+.win { color: #4ade80; }
+.lose { color: #f87171; }
+
+.paint-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; justify-items: center; margin: 10px 0; }
+.swatch.reset { background: var(--paper); color: var(--hint); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+
+#race-screen.open { display: flex; flex-direction: column; }

@@ -72,7 +72,10 @@ const Workshop = {
     document.querySelectorAll('[data-pick]').forEach(r => r.onclick = async () => {
       const [slot, lvl] = r.dataset.pick.split('|');
       if (State.online) {
-        try { await API.installPart(null, car.uid.replace(/^s/, ''), slot); await Game.pullSync(); }
+        // сервер требует id конкретной детали со склада (берём из снапшота applyServer)
+        const ids = (State.data._serverPartIds || {})[r.dataset.pick];
+        if (!ids || !ids.length) { UI.toast('Склад синхронизируется, повтори'); return; }
+        try { await API.installPart(ids[0], car.uid.replace(/^s/, ''), slot); await Game.pullSync(); }
         catch (e) { UI.toast(errText(e)); return; }
       } else {
         d.inventory[r.dataset.pick]--;

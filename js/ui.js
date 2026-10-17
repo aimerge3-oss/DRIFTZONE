@@ -39,8 +39,8 @@ const UI = {
       ['workshop', '🔧', 'Цех'], ['profile', '👤', 'Профиль'],
     ];
     nav.innerHTML = tabs.map(([id, icon, label]) =>
-      `<button class="tab ${this.current === id ? 'active' : ''}" data-tab="${id}">
-         <span>${icon}</span><small>${label}</small></button>`).join('');
+      `<button class="${this.current === id ? 'active' : ''}" data-tab="${id}">
+         <span class="ico">${icon}</span><small>${label}</small></button>`).join('');
     nav.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { this.go(b.dataset.tab); UI.haptic('light'); });
   },
 

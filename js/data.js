@@ -207,5 +207,5 @@ const QUESTS_NEWBIE = [
   { id:'q_museum',    text:'Поставь машину в музей',    check:s=>s.museum.length>=1,        reward:100000 },
 ];
 
-const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-if (tg && tg.ready) { tg.ready(); tg.expand(); }
+// (инициализация Telegram WebApp — в js/config.js, здесь не дублируем:
+//  повторное `const tg` в одном скрипте ломал загрузку всей игры)

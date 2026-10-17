@@ -117,16 +117,19 @@ const State = {
     d.level = snap.user.level; d.xp = snap.user.xp;
     d.fuel = snap.user.fuel; d.fuelAt = snap.user.fuel_last_update * 1000;
     d.garage = snap.cars.map(c => ({
-      uid: 's' + c.id, carId: c.car_id, level: c.level, parts: {}, paint: null,
+      uid: 's' + c.id, carId: c.car_id, level: c.level, parts: {}, paint: c.color_hex || null,
       incomeAt: c.income_at * 1000,
     }));
+    // склад: part_id|stage → id строки user_parts (нужен для uninstall по API)
+    d._serverPartIds = {};
     for (const p of snap.parts) {
       if (p.equipped_to_car_id) {
         const g = d.garage.find(x => x.uid === 's' + p.equipped_to_car_id);
-        if (g) g.parts[p.part_id] = p.stage;
+        if (g) g.parts[p.part_id] = p.stage;            // stage 1-based, как в Workshop.statsOf
       } else {
-        const k = p.part_id + '|' + p.stage;
+        const k = p.part_id + '|' + (p.stage - 1);      // локальный ключ инвентаря — 0-based lvlIdx
         d.inventory[k] = (d.inventory[k] || 0) + 1;
+        (d._serverPartIds[k] ||= []).push(p.id);
       }
     }
     for (const c of d.garage) d.collection[c.carId] = true;
