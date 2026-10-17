@@ -44,7 +44,7 @@ const Admin = {
     // офлайн-читы (только для отладки, в проде сервер их не примет)
     const d = State.data;
     switch (a) {
-      case 'money': State.earn(amt); break;
+      case 'money': State.earn(amt); UI.renderHeader(); break;
       case 'stars': d.stars = (d.stars || 0) + 100; State.save(); break;
       case 'fuel': d.fuel = RACE.fuelMax; d.fuelAt = Date.now(); State.save(); break;
       case 'car': { const id = document.getElementById('ad-carid').value; if (carById(id)) State.addCar(id); break; }

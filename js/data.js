@@ -106,17 +106,27 @@ const R_ORDER = ['D','C','B','A','S'];
 const carById = id => CARS.find(c=>c.id===id);
 const raceClass = r => r==='X' ? 'S' : r;
 
-// Кейсы машин. minPrice: дроп не дешевле половины цены кейса.
+// Категории кейсов (переключатель на экране «Кейсы»)
+const CASE_CATEGORIES = [
+  { id:'rust',   name:'Обычный' },
+  { id:'city',   name:'Городской' },
+  { id:'sport',  name:'Редкий' },
+  { id:'elite',  name:'Элита' },
+  { id:'legend', name:'Легендарный' },
+];
+
+// Кейсы машин. minPrice: дроп не дешевле половины цены кейса. pool — вероятности редкостей, сумма = 100.
+// cat — категория на экране; featured — машина в центре витрины; country — страновой кейс.
 const CAR_CASES = [
-  { id:'rust',   name:'Ржавый',    price:50000,   minPrice:25000,   icon:'🟤', pool:{ D:100 } },
-  { id:'city',   name:'Городской', price:500000,  minPrice:200000,  icon:'🔵', pool:{ D:70, C:26, B:4 } },
-  { id:'sport',  name:'Спорткар',  price:2500000, minPrice:1400000, icon:'🟣', pool:{ C:55, B:38, A:7 } },
-  { id:'elite',  name:'Элита',     price:8000000, minPrice:4000000, icon:'🟡', pool:{ B:55, A:38, S:7 } },
-  { id:'case_ru',name:'Кейс RU',   price:350000,  minPrice:175000,  icon:'🇷🇺', country:'ru', pool:{ D:80, C:16, B:3, A:1 } },
-  { id:'case_jp',name:'Кейс JP',   price:1700000, minPrice:850000,  icon:'🇯🇵', country:'jp', pool:{ D:40, C:35, B:20, A:5 } },
-  { id:'case_de',name:'Кейс DE',   price:2600000, minPrice:1300000, icon:'🇩🇪', country:'de', pool:{ D:30, C:35, B:28, A:6, S:1 } },
-  { id:'case_it',name:'Кейс IT',   price:6500000, minPrice:3250000, icon:'🇮🇹', country:'it', pool:{ C:30, B:40, A:25, S:5 } },
-  { id:'case_us',name:'Кейс US',   price:2550000, minPrice:1275000, icon:'🇺🇸', country:'us', pool:{ D:25, C:40, B:25, A:9, S:1 } },
+  { id:'rust',   name:'Ржавый',    price:50000,   minPrice:25000,   icon:'🟤', cat:'rust',   featured:'vaz2107',  pool:{ D:100 } },
+  { id:'city',   name:'Городской', price:500000,  minPrice:200000,  icon:'🔵', cat:'city',   featured:'corolla',  pool:{ D:70, C:26, B:4 } },
+  { id:'sport',  name:'Спорткар',  price:2500000, minPrice:1400000, icon:'🟣', cat:'sport',  featured:'supra',    pool:{ C:55, B:38, A:7 } },
+  { id:'elite',  name:'Элита',     price:8000000, minPrice:4000000, icon:'🟡', cat:'elite',  featured:'urus',     pool:{ B:55, A:38, S:7 } },
+  { id:'case_ru',name:'Кейс RU',   price:350000,  minPrice:175000,  icon:'🇷🇺', cat:'rust',   featured:'priora',   country:'ru', pool:{ D:80, C:16, B:3, A:1 } },
+  { id:'case_jp',name:'Кейс JP',   price:1700000, minPrice:850000,  icon:'🇯🇵', cat:'sport',  featured:'r34',      country:'jp', pool:{ D:40, C:35, B:20, A:5 } },
+  { id:'case_de',name:'Кейс DE',   price:2600000, minPrice:1300000, icon:'🇩🇪', cat:'elite',  featured:'m4g82',    country:'de', pool:{ D:30, C:35, B:28, A:6, S:1 } },
+  { id:'case_it',name:'Кейс IT',   price:6500000, minPrice:3250000, icon:'🇮🇹', cat:'legend', featured:'huracan',  country:'it', pool:{ C:30, B:40, A:25, S:5 } },
+  { id:'case_us',name:'Кейс US',   price:2550000, minPrice:1275000, icon:'🇺🇸', cat:'sport',  featured:'mustang67',country:'us', pool:{ D:25, C:40, B:25, A:9, S:1 } },
 ];
 
 // Детали
