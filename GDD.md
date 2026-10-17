@@ -1,4 +1,4 @@
-# DRIFTZONE: AUTO — дизайн-документ
+# DROPZONE: AUTO — дизайн-документ
 
 Telegram Mini App. Коллекционирование машин, тюнинг и гонки. Вдохновлено NomerokAppBot.
 
